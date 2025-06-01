@@ -2,7 +2,8 @@ from django.urls import path
 
 from . import views
 
-urlpatterns = [
+app_name = "polls"  # Namespace for the polls app
+urlpatterns = [  # URL patterns for the 'polls' resource
     # ex: /polls/
     path("", views.index, name="index"),
     # ex: /polls/5/

@@ -1,1 +1,25 @@
-{{ question }}
+<body>
+  {% comment %}Form action URL follows polls app urls name 'vote'{% endcomment %}
+  <form action="{% url 'polls:vote' question.id %}" method="post">
+    {% comment %}POST form should consider 'Cross Site Request Forgeries'{% endcomment %}
+    {% csrf_token %}
+    <fieldset>
+      <legend>
+        {% comment %}Question models column{% endcomment %}
+        <h1>{{ question.question_text }}</h1>
+      </legend>
+      {% comment %}views.vote 에서 정의된 context key{% endcomment %}
+      {% if error_message %}
+        <p>
+          <strong>{{ error_message }}</strong>
+        </p>
+      {% endif %}
+      {% comment %}'*_set' is Reverse Relationship features in Django{% endcomment %}
+      {% for choice in question.choice_set.all %}
+        <input type="radio" name="choice" id="choice{{ forloop.counter }}" value="{{ choice.id }}" />
+        <label for="choice{{ forloop.counter }}">{{ choice.choice_text }}</label><br />
+      {% endfor %}
+    </fieldset>
+    <input type="submit" value="Vote" />
+  </form>
+</body>
