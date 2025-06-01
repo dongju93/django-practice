@@ -20,6 +20,8 @@ from django.contrib.auth.models import User
 from django.urls import include, path
 from rest_framework import routers, serializers, viewsets
 
+from main.settings import DEBUG
+
 
 # Serializers define the API representation.
 class UserSerializer(serializers.HyperlinkedModelSerializer):
@@ -39,9 +41,16 @@ router = routers.DefaultRouter()
 router.register(r"users", UserViewSet)
 
 
-urlpatterns = [
+urlpatterns = [  # root routes
     path("", include(router.urls)),
     path("admin/", admin.site.urls),
     path("polls/", include("polls.urls")),
     path("api-auth/", include("rest_framework.urls")),
 ]
+
+if DEBUG:
+    import debug_toolbar
+
+    urlpatterns += [
+        path("__debug__/", include(debug_toolbar.urls)),
+    ]

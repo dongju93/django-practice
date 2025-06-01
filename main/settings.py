@@ -25,6 +25,11 @@ SECRET_KEY = "django-insecure-w53(aa%kk_mtr5u&(op9o9^z@7xb%xegb4n+91t$3=!(*iduj@
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
+if DEBUG:
+    INTERNAL_IPS = [
+        "127.0.0.1",
+    ]
+
 ALLOWED_HOSTS = []
 
 
@@ -38,10 +43,13 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # "silk",  # Django Silk for profiling and monitoring
+    "debug_toolbar",  # Debug toolbar for development
     "rest_framework",
 ]
 
 MIDDLEWARE = [
+    # "silk.middleware.SilkyMiddleware",  # Middleware for Django Silk
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -49,6 +57,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "debug_toolbar.middleware.DebugToolbarMiddleware",  # Debug toolbar middleware
 ]
 
 ROOT_URLCONF = "main.urls"
