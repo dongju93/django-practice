@@ -3,13 +3,18 @@ from django.urls import path
 from . import views
 
 app_name = "polls"  # Namespace for the polls app
+"""
+patterns has changed from <question_id> to <pk> (15, 17 line)
+This is necessary because we’ll use the `DetailView` generic view to replace our `detail()` and `results()` views
+expects the primary key value captured from the URL to be called "pk".
+"""
 urlpatterns = [  # URL patterns for the 'polls' resource
     # ex: /polls/
-    path("", views.index, name="index"),
+    path("", views.IndexView.as_view(), name="index"),
     # ex: /polls/5/
-    path("<int:question_id>/", views.detail, name="detail"),
+    path("<int:pk>/", views.DetailView.as_view(), name="detail"),
     # ex: /polls/5/results/
-    path("<int:question_id>/results/", views.results, name="results"),
+    path("<int:pk>/results/", views.ResultsView.as_view(), name="results"),
     # ex: /polls/5/vote/
     path("<int:question_id>/vote/", views.vote, name="vote"),
 ]
