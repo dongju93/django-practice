@@ -29,3 +29,16 @@ plugins = ["mypy_django_plugin.main"]
 
 [tool.django-stubs]
 django_settings_module = "main.settings"
+
+[tool.pylint.'MASTER']
+ignore = [".venv", "migrations"]
+
+[tool.pylint.'MESSAGES CONTROL']
+disable = ["missing-docstring"]
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+line_length = 88
+profile = "black"
