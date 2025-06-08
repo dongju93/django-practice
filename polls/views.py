@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.views import generic
 
-from .models import Choice, Question
+from polls.models import Choice, Question
 
 """
 Each generic view needs to know what model it will be acting upon
@@ -26,7 +26,7 @@ class IndexView(generic.ListView):
 
     def get_queryset(self):
         """Return the last five published questions."""
-        return Question.objects.order_by("-pub_date")[:5]
+        return Question.objects.order_by("-pub_date")[:5]  # pylint: disable=no-member
 
 
 class DetailView(generic.DetailView):
@@ -48,7 +48,7 @@ def vote(request, question_id):
     question = get_object_or_404(Question, pk=question_id)
     try:
         selected_choice = question.choice_set.get(pk=request.POST["choice"])
-    except (KeyError, Choice.DoesNotExist):
+    except (KeyError, Choice.DoesNotExist):  # pylint: disable=no-member
         # Redisplay the question voting form.
         return render(
             request,

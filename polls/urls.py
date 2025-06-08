@@ -2,7 +2,7 @@ from django.urls import path
 
 from . import views
 
-app_name = "polls"  # Namespace for the polls app
+app_name = "polls"  # pylint: disable=invalid-name
 """
 patterns has changed from <question_id> to <pk> (15, 17 line)
 This is necessary because we’ll use the `DetailView` generic view to replace our `detail()` and `results()` views
