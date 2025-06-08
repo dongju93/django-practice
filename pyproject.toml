@@ -27,6 +27,7 @@ dev = [
 
 [tool.mypy]
 plugins = ["mypy_django_plugin.main"]
+ignore_missing_imports = true
 
 [tool.django-stubs]
 django_settings_module = "main.settings"
@@ -35,7 +36,10 @@ django_settings_module = "main.settings"
 ignore = [".venv", "migrations"]
 
 [tool.pylint.'MESSAGES CONTROL']
-disable = ["missing-docstring"]
+disable = [
+    "missing-docstring",
+    "inconsistent-return-statements",
+]
 
 [tool.black]
 line-length = 88
