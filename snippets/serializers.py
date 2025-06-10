@@ -1,6 +1,6 @@
 from rest_framework import serializers
-from snippets.models import Snippet, LANGUAGE_CHOICES, STYLE_CHOICES
 
+from snippets.models import Snippet  # LANGUAGE_CHOICES, STYLE_CHOICES
 
 # class SnippetSerializer(serializers.Serializer):
 #     """검증 플래그 (required, max_length, default)를 지닌 직렬화 클래스"""

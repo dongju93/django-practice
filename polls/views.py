@@ -1,3 +1,9 @@
+"""
+Each generic view needs to know what model it will be acting upon
+- DetailView generic view uses a template called <app name>/<model name>_detail.html.
+- ListView generic view uses a default template called <app name>/<model name>_list.html
+"""
+
 from django.db.models import F
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
@@ -5,12 +11,6 @@ from django.urls import reverse
 from django.views import generic
 
 from polls.models import Choice, Question
-
-"""
-Each generic view needs to know what model it will be acting upon
-- DetailView generic view uses a template called <app name>/<model name>_detail.html.
-- ListView generic view uses a default template called <app name>/<model name>_list.html
-"""
 
 
 class IndexView(generic.ListView):
@@ -45,10 +45,16 @@ class ResultsView(generic.DetailView):
 
 
 def vote(request, question_id):
-    question = get_object_or_404(Question, pk=question_id)
+    question = get_object_or_404(
+        Question,
+        pk=question_id,
+    )
     try:
         selected_choice = question.choice_set.get(pk=request.POST["choice"])
-    except (KeyError, Choice.DoesNotExist):  # pylint: disable=no-member
+    except (
+        KeyError,
+        Choice.DoesNotExist,
+    ):  # pylint: disable=no-member
         # Redisplay the question voting form.
         return render(
             request,
@@ -58,10 +64,14 @@ def vote(request, question_id):
                 "error_message": "You didn't select a choice.",
             },
         )
-    else:
-        selected_choice.votes = F("votes") + 1  #  Increment the votes in database level
-        selected_choice.save()  # Save the updated choice with incremented votes
-        # Always return an HttpResponseRedirect after successfully dealing
-        # with POST data. This prevents data from being posted twice if a
-        # user hits the Back button.
-        return HttpResponseRedirect(reverse("polls:results", args=(question.id,)))
+    selected_choice.votes = F("votes") + 1  #  Increment the votes in database level
+    selected_choice.save()  # Save the updated choice with incremented votes
+    # Always return an HttpResponseRedirect after successfully dealing
+    # with POST data. This prevents data from being posted twice if a
+    # user hits the Back button.
+    return HttpResponseRedirect(
+        reverse(
+            "polls:results",
+            args=(question.id,),
+        )
+    )
