@@ -39,11 +39,14 @@ ignore = [".venv", "migrations"]
 disable = [
     "missing-docstring",
     "inconsistent-return-statements",
+    "no-member"
 ]
 
 [tool.black]
 line-length = 88
+target-version = ["py313"]
 
 [tool.isort]
 line_length = 88
 profile = "black"
+combine_as_imports = true
