@@ -7,19 +7,19 @@ requires-python = ">=3.13"
 dependencies = [
     "django>=5.2.1",
     "django-background-tasks>=1.2.8", # Background tasks
-    "django-environ>=0.12.0", # Load environment variables from .env files
+    "django-environ>=0.12.0",         # Load environment variables from .env files
     "django-filter>=25.1",
     "djangorestframework>=3.16.0",
     "markdown>=3.8",
     "pygments>=2.19.1",
-    "whitenoise>=6.9.0", # Serve static files in production
+    "whitenoise>=6.9.0",              # Serve static files in production
 ]
 
 [dependency-groups]
 dev = [
     "black>=25.1.0",
-    "django-debug-toolbar>=5.2.0", # Debugging tool for Django
-    "django-silk>=5.3.2", # Profiling and monitoring tool for Django
+    "django-debug-toolbar>=5.2.0",          # Debugging tool for Django
+    "django-silk>=5.3.2",                   # Profiling and monitoring tool for Django
     "django-stubs[compatible-mypy]>=5.2.0", # Type hints for Django
     "isort>=6.0.1",
     "pylint-django>=2.6.1",
@@ -36,17 +36,19 @@ django_settings_module = "main.settings"
 ignore = [".venv", "migrations"]
 
 [tool.pylint.'MESSAGES CONTROL']
-disable = [
-    "missing-docstring",
-    "inconsistent-return-statements",
-    "no-member"
-]
+disable = ["missing-docstring", "inconsistent-return-statements", "no-member"]
 
 [tool.black]
-line-length = 88
 target-version = ["py313"]
 
 [tool.isort]
-line_length = 88
 profile = "black"
 combine_as_imports = true
+py_version = 313
+known_first_party = ["main", "polls", "snippets"]
+known_local_folder = ["main", "polls", "snippets"]
+atomic = true
+balanced_wrapping = true
+combine_star = true
+group_by_package = true
+case_sensitive = true
