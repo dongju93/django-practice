@@ -8,7 +8,7 @@ class Question(models.Model):
     question_text = models.CharField(max_length=200)
     pub_date = models.DateTimeField("date published")
 
-    def __str__(self):
+    def __str__(self):  # pylint: disable=invalid-str-returned
         return self.question_text
 
     def was_published_recently(self):
@@ -20,5 +20,5 @@ class Choice(models.Model):
     choice_text = models.CharField(max_length=200)
     votes = models.IntegerField(default=0)
 
-    def __str__(self):
+    def __str__(self):  # pylint: disable=invalid-str-returned
         return self.choice_text
