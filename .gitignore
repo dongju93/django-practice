@@ -327,4 +327,8 @@ fabric.properties
 # pycharm
 .idea/
 static/
+# Keep per-app source static assets (e.g. vendored DataTables); only the
+# collectstatic output at STATIC_ROOT (the project-root static/) is ignored.
+!*/static/
+!*/static/**
 log/

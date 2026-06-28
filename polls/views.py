@@ -44,6 +44,55 @@ class ResultsView(generic.DetailView):
     template_name = "polls/results.html"  # The template to render the results view
 
 
+def datatables(request):
+    """
+    Render a DataTables-powered table whose cells can be selected by row and
+    column, then copied as JSON.
+
+    The table is populated from the related ``Choice`` rows so the demo always
+    has multi-column, multi-row data to select from. When the database has no
+    choices yet, a small set of sample rows is used instead so the feature can
+    still be exercised.
+    """
+
+    columns = ["ID", "Question", "Choice", "Votes", "Published"]
+
+    choices = Choice.objects.select_related("question").order_by(
+        "question__pub_date", "id"
+    )
+
+    rows = [
+        [
+            choice.id,
+            choice.question.question_text,
+            choice.choice_text,
+            choice.votes,
+            choice.question.pub_date.strftime("%Y-%m-%d"),
+        ]
+        for choice in choices
+    ]
+
+    if not rows:
+        # Fallback sample data so the page is usable without seeded records.
+        rows = [
+            [1, "What's your favorite language?", "Python", 42, "2026-01-02"],
+            [2, "What's your favorite language?", "Rust", 17, "2026-01-02"],
+            [3, "What's your favorite language?", "Go", 23, "2026-01-02"],
+            [4, "Best editor?", "VS Code", 55, "2026-02-11"],
+            [5, "Best editor?", "Neovim", 31, "2026-02-11"],
+            [6, "Best editor?", "JetBrains", 12, "2026-02-11"],
+        ]
+
+    return render(
+        request,
+        "polls/datatables.html",
+        {
+            "columns": columns,
+            "rows": rows,
+        },
+    )
+
+
 def vote(request, question_id):
     question = get_object_or_404(
         Question,

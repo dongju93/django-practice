@@ -1,0 +1,305 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DataTables · 셀 선택 후 JSON 복사</title>
+
+    <!-- DataTables core + Select extension (vendored locally) -->
+    <link
+      rel="stylesheet"
+      href="{% static 'polls/datatables/dataTables.dataTables.min.css' %}"
+    />
+    <link
+      rel="stylesheet"
+      href="{% static 'polls/datatables/select.dataTables.min.css' %}"
+    />
+
+    <style>
+      body {
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        margin: 2rem;
+        color: #1f2933;
+      }
+      h1 {
+        font-size: 1.4rem;
+      }
+      .hint {
+        background: #f1f5f9;
+        border-left: 4px solid #2563eb;
+        padding: 0.75rem 1rem;
+        margin: 1rem 0;
+        font-size: 0.9rem;
+        line-height: 1.5;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+        margin: 1rem 0;
+      }
+      .toolbar button {
+        cursor: pointer;
+        border: 1px solid #cbd5e1;
+        background: #fff;
+        border-radius: 6px;
+        padding: 0.45rem 0.9rem;
+        font-size: 0.85rem;
+      }
+      .toolbar button.primary {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: #fff;
+      }
+      .toolbar button:hover {
+        filter: brightness(0.96);
+      }
+      .selected-count {
+        margin-left: auto;
+        font-size: 0.85rem;
+        color: #475569;
+      }
+      /* Make headers and the row-handle column look clickable */
+      table.dataTable thead th {
+        cursor: pointer;
+        user-select: none;
+      }
+      table.dataTable td.dt-handle {
+        cursor: pointer;
+        text-align: center;
+        color: #64748b;
+        background: #f8fafc;
+        user-select: none;
+      }
+      /* Highlight a column header when all its cells are selected */
+      table.dataTable thead th.col-selected {
+        background: #dbeafe;
+      }
+      pre#jsonPreview {
+        background: #0f172a;
+        color: #e2e8f0;
+        padding: 1rem;
+        border-radius: 8px;
+        max-height: 360px;
+        overflow: auto;
+        font-size: 0.82rem;
+        line-height: 1.45;
+      }
+      .copied-flash {
+        color: #16a34a;
+        font-size: 0.85rem;
+        margin-left: 0.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>DataTables — 행 / 열 / 셀 선택 후 JSON 복사</h1>
+
+    <div class="hint">
+      <strong>사용 방법</strong><br />
+      • <b>셀</b>: 셀을 클릭하면 개별 선택/해제됩니다.<br />
+      • <b>열</b>: 열 머리글(헤더)을 클릭하면 해당 열 전체가 선택/해제됩니다.<br />
+      • <b>행</b>: 맨 왼쪽 <code>#</code> 칸을 클릭하면 해당 행 전체가 선택/해제됩니다.<br />
+      • <b>JSON 복사</b> 버튼을 누르면 선택된 셀만 행별 객체 배열 형태로 클립보드에 복사됩니다.
+    </div>
+
+    <div class="toolbar">
+      <button id="copyJson" class="primary" type="button">JSON 복사</button>
+      <button id="clearSel" type="button">선택 해제</button>
+      <span id="copiedFlash" class="copied-flash" hidden>복사됨!</span>
+      <span class="selected-count">선택된 셀: <b id="selCount">0</b></span>
+    </div>
+
+    <table id="cellTable" class="display" style="width: 100%">
+      <thead>
+        <tr>
+          <th class="no-sort">#</th>
+          {% for col in columns %}<th>{{ col }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td class="dt-handle">{{ forloop.counter }}</td>
+            {% for cell in row %}<td>{{ cell }}</td>{% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h2 style="font-size: 1rem; margin-top: 1.5rem">선택된 셀 (JSON 미리보기)</h2>
+    <pre id="jsonPreview">[]</pre>
+
+    <!-- jQuery + DataTables + Select extension (vendored locally) -->
+    <script src="{% static 'polls/datatables/jquery-3.7.1.min.js' %}"></script>
+    <script src="{% static 'polls/datatables/dataTables.min.js' %}"></script>
+    <script src="{% static 'polls/datatables/dataTables.select.min.js' %}"></script>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        // Column index 0 is the non-data "row handle" (#) column.
+        const HANDLE_COL = 0;
+
+        const table = new DataTable("#cellTable", {
+          // Cell-level selection; clicking toggles without needing Ctrl/Shift.
+          select: {
+            style: "multi",
+            items: "cell",
+            // Don't auto-select when the row-handle column is clicked; that
+            // column drives whole-row selection instead (handled below).
+            selector: "td:not(.dt-handle)",
+          },
+          // The handle column is purely a control, so disable its sorting.
+          columnDefs: [{ targets: HANDLE_COL, orderable: false }],
+          order: [],
+        });
+
+        const dataColumns = table
+          .columns()
+          .indexes()
+          .toArray()
+          .filter((i) => i !== HANDLE_COL);
+
+        // --- Whole-column selection via header click ---------------------
+        table.columns().every(function () {
+          const colIdx = this.index();
+          if (colIdx === HANDLE_COL) return;
+          $(this.header()).on("click", function () {
+            const cells = table.cells(null, colIdx, { search: "applied" });
+            const allSelected = cells
+              .nodes()
+              .toArray()
+              .every((td) => td.classList.contains("selected"));
+            if (allSelected) {
+              cells.deselect();
+            } else {
+              cells.select();
+            }
+          });
+        });
+
+        // --- Whole-row selection via the handle (#) column ---------------
+        $("#cellTable tbody").on("click", "td.dt-handle", function () {
+          const rowIdx = table.cell(this).index().row;
+          const cells = table.cells(rowIdx, dataColumns);
+          const allSelected = cells
+            .nodes()
+            .toArray()
+            .every((td) => td.classList.contains("selected"));
+          if (allSelected) {
+            cells.deselect();
+          } else {
+            cells.select();
+          }
+        });
+
+        // --- Keep UI (count, header highlight, preview) in sync ----------
+        function coerce(value) {
+          const text = String(value).trim();
+          if (text !== "" && /^-?\d+(\.\d+)?$/.test(text)) {
+            return Number(text);
+          }
+          return text;
+        }
+
+        function buildJson() {
+          const byRow = {};
+          table.cells({ selected: true }).every(function () {
+            const idx = this.index();
+            if (idx.column === HANDLE_COL) return;
+            const header = table
+              .column(idx.column)
+              .header()
+              .textContent.trim();
+            byRow[idx.row] = byRow[idx.row] || {};
+            byRow[idx.row][header] = coerce(this.data());
+          });
+          return Object.keys(byRow)
+            .map(Number)
+            .sort((a, b) => a - b)
+            .map((r) => byRow[r]);
+        }
+
+        function refresh() {
+          const selected = table.cells({ selected: true });
+          // Exclude any stray handle-column cells from the visible count.
+          let count = 0;
+          selected.every(function () {
+            if (this.index().column !== HANDLE_COL) count += 1;
+          });
+          document.getElementById("selCount").textContent = count;
+
+          // Highlight headers whose entire column is selected.
+          table.columns().every(function () {
+            const colIdx = this.index();
+            if (colIdx === HANDLE_COL) return;
+            const cells = table.cells(null, colIdx, { search: "applied" });
+            const nodes = cells.nodes().toArray();
+            const allSelected =
+              nodes.length > 0 &&
+              nodes.every((td) => td.classList.contains("selected"));
+            this.header().classList.toggle("col-selected", allSelected);
+          });
+
+          document.getElementById("jsonPreview").textContent = JSON.stringify(
+            buildJson(),
+            null,
+            2,
+          );
+        }
+
+        table.on("select deselect", refresh);
+        refresh();
+
+        // --- Copy to clipboard -------------------------------------------
+        async function copyText(text) {
+          try {
+            if (navigator.clipboard && window.isSecureContext) {
+              await navigator.clipboard.writeText(text);
+              return true;
+            }
+          } catch (e) {
+            /* fall through to legacy path */
+          }
+          // Legacy fallback for non-secure contexts (e.g. http://localhost).
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          let ok = false;
+          try {
+            ok = document.execCommand("copy");
+          } catch (e) {
+            ok = false;
+          }
+          document.body.removeChild(ta);
+          return ok;
+        }
+
+        document
+          .getElementById("copyJson")
+          .addEventListener("click", async function () {
+            const json = JSON.stringify(buildJson(), null, 2);
+            const ok = await copyText(json);
+            if (ok) {
+              const flash = document.getElementById("copiedFlash");
+              flash.hidden = false;
+              setTimeout(() => (flash.hidden = true), 1500);
+            } else {
+              window.prompt("아래 JSON을 복사하세요 (Ctrl+C):", json);
+            }
+          });
+
+        document
+          .getElementById("clearSel")
+          .addEventListener("click", function () {
+            table.cells({ selected: true }).deselect();
+          });
+      });
+    </script>
+  </body>
+</html>

@@ -11,6 +11,8 @@ expects the primary key value captured from the URL to be called "pk".
 urlpatterns = [  # URL patterns for the 'polls' resource
     # ex: /polls/
     path("", views.IndexView.as_view(), name="index"),
+    # ex: /polls/datatables/  -> selectable-cell table with copy-as-JSON
+    path("datatables/", views.datatables, name="datatables"),
     # ex: /polls/5/
     path("<int:pk>/", views.DetailView.as_view(), name="detail"),
     # ex: /polls/5/results/
