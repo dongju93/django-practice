@@ -36,6 +36,10 @@
     .badge-active   { background-color: #198754; }
     .badge-inactive { background-color: #6c757d; }
     #hostTable thead th { background-color: #343a40; color: #fff; }
+    .selection-toolbar { border: 1px solid #dee2e6; border-radius: .5rem; background: #f8f9fa; }
+    .column-selector { display: flex; flex-wrap: wrap; gap: .5rem 1rem; }
+    .table > tbody > tr.row-selected > * { --bs-table-bg: #cfe2ff; }
+    #copyStatus { min-height: 1.5rem; }
   </style>
 </head>
 <body>
@@ -52,6 +56,85 @@
 
   <div class="card shadow-sm">
     <div class="card-body">
+      <!--
+        [05-A] 행·열 선택 및 JSON 복사 도구
+        행은 아래 테이블의 Actions 열에 있는 체크박스 또는 "Select page rows"로 선택한다.
+        열 체크박스는 JSON 객체에 포함할 필드를 결정한다. 최종 복사 범위는
+        "선택한 행 × 선택한 열"의 교차 영역이며 Actions 열은 데이터가 아니므로 제외한다.
+
+        서버 사이드 페이지네이션에서는 현재 페이지 행만 DOM에 존재하므로,
+        선택 상태는 JavaScript의 selectedRows Map에 별도로 보관한다.
+        따라서 페이지를 이동해도 이전 페이지에서 선택한 행을 함께 복사할 수 있다.
+      -->
+      <section class="selection-toolbar p-3 mb-3" aria-labelledby="selectionTitle">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <h3 class="h6 fw-bold mb-0" id="selectionTitle">Selection &amp; JSON copy</h3>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-sm btn-outline-primary" id="btnSelectPageRows">
+              Select page rows
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnClearRows">
+              Clear all rows
+            </button>
+          </div>
+        </div>
+
+        <fieldset class="border-0 p-0 m-0">
+          <legend class="small fw-semibold mb-2">Columns included in JSON</legend>
+          <div class="column-selector" id="columnSelector">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="id" id="columnId" checked />
+              <label class="form-check-label" for="columnId">#</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="hostname" id="columnHostname" checked />
+              <label class="form-check-label" for="columnHostname">Hostname</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="ip_address" id="columnIpAddress" checked />
+              <label class="form-check-label" for="columnIpAddress">IP Address</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="description" id="columnDescription" checked />
+              <label class="form-check-label" for="columnDescription">Description</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="is_active" id="columnIsActive" checked />
+              <label class="form-check-label" for="columnIsActive">Status</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="created_at" id="columnCreatedAt" checked />
+              <label class="form-check-label" for="columnCreatedAt">Created</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="updated_at" id="columnUpdatedAt" checked />
+              <label class="form-check-label" for="columnUpdatedAt">Updated</label>
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnSelectAllColumns">
+              All columns
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnClearColumns">
+              No columns
+            </button>
+            <span class="small text-muted" id="selectionSummary">0 rows × 7 columns selected</span>
+          </div>
+          <button type="button" class="btn btn-sm btn-success" id="btnCopySelected" disabled>
+            Copy selected cells as JSON
+          </button>
+        </div>
+
+        <!--
+          role="status"와 aria-live는 복사 성공·실패 결과를 화면 낭독기에 전달한다.
+          버튼 포커스를 이동시키지 않으므로 연속해서 선택을 수정하고 다시 복사할 수 있다.
+        -->
+        <p class="small mb-0 mt-2" id="copyStatus" role="status" aria-live="polite"></p>
+      </section>
+
       <!--
         [05] DataTables가 데이터를 표현할 테이블
         thead의 8개 th는 열 제목만 정의한다. tbody는 의도적으로 비어 있으며,
@@ -200,6 +283,48 @@
   }
 
   /*
+   * [10-A] 페이지 이동과 무관한 선택 상태 저장소
+   * DataTables는 서버 사이드 모드에서 페이지를 바꿀 때 기존 tr을 제거하므로,
+   * 체크박스 DOM만으로는 이전 페이지의 선택을 기억할 수 없다.
+   *
+   * selectedRows는 HostIP id를 키로, 서버에서 받은 원본 행 객체를 값으로 보관한다.
+   * Map을 사용하면 같은 행을 여러 번 선택해도 중복되지 않고, 삽입 순서가 유지되어
+   * 사용자가 선택한 순서대로 JSON 배열을 만들 수 있다.
+   */
+  const selectedRows = new Map();
+
+  /*
+   * [10-B] 현재 열 선택과 요약 문구 갱신
+   * 체크된 input의 value는 서버 응답 객체의 실제 키와 동일하다.
+   * 복사 버튼은 행과 열이 각각 하나 이상 선택됐을 때만 활성화하여
+   * 빈 배열 또는 빈 객체를 실수로 복사하는 상황을 막는다.
+   */
+  function getSelectedFields() {
+    return $("#columnSelector input[type='checkbox']:checked")
+      .map((_, input) => input.value)
+      .get();
+  }
+
+  function updateSelectionSummary() {
+    const rowCount = selectedRows.size;
+    const columnCount = getSelectedFields().length;
+    $("#selectionSummary").text(`${rowCount} rows × ${columnCount} columns selected`);
+    $("#btnCopySelected").prop("disabled", rowCount === 0 || columnCount === 0);
+  }
+
+  /*
+   * [10-C] 사용자에게 복사 결과 알림
+   * 성공과 실패를 색상만으로 구분하지 않고 문장으로도 전달한다.
+   * 새 선택 작업을 시작할 때는 빈 문자열을 전달해 이전 결과를 지운다.
+   */
+  function setCopyStatus(message, isError = false) {
+    $("#copyStatus")
+      .text(message)
+      .toggleClass("text-success", Boolean(message) && !isError)
+      .toggleClass("text-danger", Boolean(message) && isError);
+  }
+
+  /*
    * [11] DataTables 초기화와 목록 데이터 호출
    * $("#hostTable")로 [05]의 테이블을 선택한 뒤 DataTable 인스턴스를 만든다.
    *
@@ -317,15 +442,20 @@
         orderable: false,
         /*
          * [13] 행별 Edit/Delete 버튼 생성
-         * 현재 행의 id를 data-id 속성에 넣는다. 이후 이벤트 핸들러는 이 값을 읽어
+         * 선택 체크박스와 Edit/Delete 버튼 모두 현재 행의 id를 data-id 속성에 넣는다.
+         * 체크박스는 해당 행을 JSON 복사 대상으로 추가·제거하고, 버튼 이벤트 핸들러는
          * 상세 조회 URL, 수정 URL 또는 삭제 URL에 사용할 대상 호스트를 결정한다.
          */
         render: id =>
-          `<div class="d-flex gap-1 justify-content-center">
+          `<div class="d-flex gap-2 justify-content-center align-items-center">
+             <input class="form-check-input row-select m-0"
+                    type="checkbox"
+                    data-id="${id}"
+                    aria-label="Select host row ${id}" />
              <button class="btn btn-sm btn-outline-primary btn-edit" data-id="${id}">Edit</button>
              <button class="btn btn-sm btn-outline-danger btn-delete" data-id="${id}">Delete</button>
            </div>`,
-        width: "130px",
+        width: "165px",
       },
     ],
 
@@ -342,6 +472,157 @@
     pageLength: 25,
     lengthMenu: [10, 25, 50, 100],
     language: { processing: "Loading…" },
+
+    /*
+     * [14-A] DataTables가 tbody를 다시 그린 직후 선택 상태 복원
+     * 검색·정렬·페이지 이동 때마다 tr과 체크박스가 새로 생성되므로,
+     * selectedRows에 id가 있는 행의 체크박스를 다시 체크하고 배경색을 적용한다.
+     * 이미 선택된 행을 서버에서 새로 받았다면 Map의 객체도 최신 응답으로 교체한다.
+     */
+    drawCallback() {
+      const api = this.api();
+      api.rows({ page: "current" }).every(function () {
+        const rowData = this.data();
+        const rowNode = this.node();
+        const isSelected = selectedRows.has(rowData.id);
+
+        if (isSelected) {
+          selectedRows.set(rowData.id, rowData);
+        }
+
+        $(rowNode)
+          .toggleClass("row-selected", isSelected)
+          .find(".row-select")
+          .prop("checked", isSelected);
+      });
+      updateSelectionSummary();
+    },
+  });
+
+  /*
+   * [14-B] 단일 행 체크박스 선택 처리
+   * AJAX로 생성되는 체크박스이므로 정적 요소가 아니라 #hostTable에 이벤트를 위임한다.
+   * DataTables API로 체크박스가 속한 tr의 원본 행 객체를 구해 Map에 저장하며,
+   * 해제 시에는 id를 키로 삭제한다.
+   */
+  $("#hostTable").on("change", ".row-select", function () {
+    const rowNode = $(this).closest("tr");
+    const rowData = table.row(rowNode).data();
+
+    if (this.checked) {
+      selectedRows.set(rowData.id, rowData);
+    } else {
+      selectedRows.delete(rowData.id);
+    }
+
+    rowNode.toggleClass("row-selected", this.checked);
+    setCopyStatus("");
+    updateSelectionSummary();
+  });
+
+  /*
+   * [14-C] 현재 페이지의 행 전체 선택과 전체 선택 해제
+   * "Select page rows"는 현재 DOM에 있는 페이지의 행만 추가한다.
+   * 기존에 다른 페이지에서 선택한 행은 유지된다.
+   * "Clear all rows"는 페이지와 관계없이 Map 전체를 비운다.
+   */
+  $("#btnSelectPageRows").on("click", () => {
+    table.rows({ page: "current" }).every(function () {
+      const rowData = this.data();
+      selectedRows.set(rowData.id, rowData);
+      $(this.node()).addClass("row-selected").find(".row-select").prop("checked", true);
+    });
+    setCopyStatus("");
+    updateSelectionSummary();
+  });
+
+  $("#btnClearRows").on("click", () => {
+    selectedRows.clear();
+    $("#hostTable tbody tr").removeClass("row-selected");
+    $("#hostTable .row-select").prop("checked", false);
+    setCopyStatus("");
+    updateSelectionSummary();
+  });
+
+  /*
+   * [14-D] JSON에 포함할 열 선택 처리
+   * 개별 체크박스 변경뿐 아니라 전체 선택/해제를 제공한다.
+   * 화면의 Actions 열은 HostIP 데이터 필드가 아니므로 선택 목록에 포함하지 않는다.
+   */
+  $("#columnSelector").on("change", "input[type='checkbox']", () => {
+    setCopyStatus("");
+    updateSelectionSummary();
+  });
+
+  $("#btnSelectAllColumns").on("click", () => {
+    $("#columnSelector input[type='checkbox']").prop("checked", true);
+    setCopyStatus("");
+    updateSelectionSummary();
+  });
+
+  $("#btnClearColumns").on("click", () => {
+    $("#columnSelector input[type='checkbox']").prop("checked", false);
+    setCopyStatus("");
+    updateSelectionSummary();
+  });
+
+  /*
+   * [14-E] Clipboard API를 사용할 수 없는 환경의 최소 대체 복사
+   * navigator.clipboard는 HTTPS 또는 localhost 같은 보안 컨텍스트에서만 동작한다.
+   * 사내 HTTP 주소처럼 Clipboard API가 막힌 환경에서는 화면 밖 textarea를 잠시 만들어
+   * 선택한 뒤 브라우저의 기존 copy 명령을 호출한다. 복사 후 요소는 즉시 제거한다.
+   */
+  function copyTextFallback(text) {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    try {
+      if (!document.execCommand("copy")) {
+        throw new Error("The browser rejected the copy command.");
+      }
+    } finally {
+      textarea.remove();
+    }
+  }
+
+  /*
+   * [14-F] 선택된 셀을 JSON 배열로 변환하고 클립보드에 복사
+   * 각 선택 행에서 사용자가 체크한 필드만 새 객체에 담는다.
+   * 화면 렌더링 결과(예: Status 배지 HTML)가 아니라 서버의 원본 값을 사용하므로
+   * is_active는 true/false 불리언으로, id는 숫자로 유지된다.
+   *
+   * 결과 예시:
+   * [
+   *   { "hostname": "web-01", "ip_address": "192.168.0.10" },
+   *   { "hostname": "db-01",  "ip_address": "192.168.0.20" }
+   * ]
+   */
+  $("#btnCopySelected").on("click", async () => {
+    const fields = getSelectedFields();
+    const jsonRows = Array.from(selectedRows.values()).map(row => {
+      const selectedCells = {};
+      fields.forEach(field => {
+        selectedCells[field] = row[field] ?? null;
+      });
+      return selectedCells;
+    });
+    const jsonText = JSON.stringify(jsonRows, null, 2);
+
+    try {
+      if (navigator.clipboard?.writeText && window.isSecureContext) {
+        await navigator.clipboard.writeText(jsonText);
+      } else {
+        copyTextFallback(jsonText);
+      }
+      setCopyStatus(`${jsonRows.length} selected rows copied as JSON.`);
+    } catch (error) {
+      setCopyStatus(`Copy failed: ${error.message}`, true);
+    }
   });
 
   /*
@@ -420,6 +701,14 @@
     const data = await apiCall(url, payload);
 
     if (data.success) {
+      /*
+       * 수정 전 행 객체가 Map에 남으면 다른 페이지로 이동한 경우 오래된 값이 복사될 수 있다.
+       * 수정 대상만 선택에서 제거하고, 새로 생성한 행은 아직 선택된 적이 없으므로 건드리지 않는다.
+       */
+      if (id) {
+        selectedRows.delete(Number(id));
+        updateSelectionSummary();
+      }
       hostModal.hide();
       table.ajax.reload();
     } else {
@@ -492,6 +781,8 @@
       {}
     );
     if (data.success) {
+      selectedRows.delete(Number(pendingDeleteId));
+      updateSelectionSummary();
       deleteModal.hide();
       table.ajax.reload();
     }
