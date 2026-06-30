@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!--
+    [01] 문서 기본 설정
+    이 파일은 Django 뷰가 먼저 HTML로 렌더링한 뒤 브라우저에 전달하는 템플릿이다.
+    브라우저는 UTF-8로 문자를 해석하고, viewport 설정을 사용해 화면 너비에 맞춰 레이아웃을 표시한다.
+  -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Host IP Manager</title>
+
+  <!--
+    [02] 화면 표현용 CSS 라이브러리
+    Bootstrap은 버튼·카드·모달·테이블의 기본 디자인을 제공한다.
+    DataTables의 Bootstrap 스킨은 DataTables가 생성하는 검색창, 페이지 이동 UI 등을
+    Bootstrap 스타일로 표현한다. 이 단계에서는 데이터를 요청하지 않고 스타일만 불러온다.
+  -->
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+        integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
+        crossorigin="anonymous" />
+  <link rel="stylesheet"
+        href="https://cdn.datatables.net/2.0.8/css/dataTables.bootstrap5.min.css"
+        integrity="sha384-A3od1iroH5dfODhbBSEOyHUQv+mVRcDXJL4XToPrjsqOofphRr+Cl3PvBcQ1QCC3"
+        crossorigin="anonymous" />
+
+  <!--
+    [03] 이 페이지 전용 표현 규칙
+    서버에서 받은 is_active 값은 아래 badge-active/badge-inactive 색상으로 구분하며,
+    #hostTable의 헤더는 데이터와 별개로 항상 어두운 배경과 흰 글자로 표시한다.
+  -->
+  <style>
+    body { background-color: #f8f9fa; }
+    .card { border-radius: .75rem; }
+    .badge-active   { background-color: #198754; }
+    .badge-inactive { background-color: #6c757d; }
+    #hostTable thead th { background-color: #343a40; color: #fff; }
+    .selection-toolbar { border: 1px solid #dee2e6; border-radius: .5rem; background: #f8f9fa; }
+    .column-selector { display: flex; flex-wrap: wrap; gap: .5rem 1rem; }
+    .table > tbody > tr.row-selected > * { --bs-table-bg: #cfe2ff; }
+    #copyStatus { min-height: 1.5rem; }
+  </style>
+</head>
+<body>
+<!--
+  [04] 목록 화면의 정적 HTML 골격
+  제목과 Add Host 버튼은 최초 HTML 응답에 포함된다. btnAddHost의 id는 뒤쪽 JavaScript가
+  클릭 이벤트를 연결할 때 사용하며, 클릭하면 서버 요청 없이 입력 모달부터 연다.
+-->
+<div class="container-fluid py-4 px-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="fw-bold mb-0">Host IP Manager</h2>
+    <button class="btn btn-primary" id="btnAddHost">+ Add Host</button>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <!--
+        [05-A] 행·열 선택 및 JSON 복사 도구
+        행은 아래 테이블의 Actions 열에 있는 체크박스 또는 "Select page rows"로 선택한다.
+        열 체크박스는 JSON 객체에 포함할 필드를 결정한다. 최종 복사 범위는
+        "선택한 행 × 선택한 열"의 교차 영역이며 Actions 열은 데이터가 아니므로 제외한다.
+
+        서버 사이드 페이지네이션에서는 현재 페이지 행만 DOM에 존재하므로,
+        선택 상태는 JavaScript의 selectedRows Map에 별도로 보관한다.
+        따라서 페이지를 이동해도 이전 페이지에서 선택한 행을 함께 복사할 수 있다.
+      -->
+      <section class="selection-toolbar p-3 mb-3" aria-labelledby="selectionTitle">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <h3 class="h6 fw-bold mb-0" id="selectionTitle">Selection &amp; JSON copy</h3>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-sm btn-outline-primary" id="btnSelectPageRows">
+              Select page rows
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnClearRows">
+              Clear all rows
+            </button>
+          </div>
+        </div>
+
+        <fieldset class="border-0 p-0 m-0">
+          <legend class="small fw-semibold mb-2">Columns included in JSON</legend>
+          <div class="column-selector" id="columnSelector">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="id" id="columnId" checked />
+              <label class="form-check-label" for="columnId">#</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="hostname" id="columnHostname" checked />
+              <label class="form-check-label" for="columnHostname">Hostname</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="ip_address" id="columnIpAddress" checked />
+              <label class="form-check-label" for="columnIpAddress">IP Address</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="description" id="columnDescription" checked />
+              <label class="form-check-label" for="columnDescription">Description</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="is_active" id="columnIsActive" checked />
+              <label class="form-check-label" for="columnIsActive">Status</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="created_at" id="columnCreatedAt" checked />
+              <label class="form-check-label" for="columnCreatedAt">Created</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="updated_at" id="columnUpdatedAt" checked />
+              <label class="form-check-label" for="columnUpdatedAt">Updated</label>
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnSelectAllColumns">
+              All columns
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnClearColumns">
+              No columns
+            </button>
+            <span class="small text-muted" id="selectionSummary">0 rows × 7 columns selected</span>
+          </div>
+          <button type="button" class="btn btn-sm btn-success" id="btnCopySelected" disabled>
+            Copy selected cells as JSON
+          </button>
+        </div>
+
+        <!--
+          role="status"와 aria-live는 복사 성공·실패 결과를 화면 낭독기에 전달한다.
+          버튼 포커스를 이동시키지 않으므로 연속해서 선택을 수정하고 다시 복사할 수 있다.
+        -->
+        <p class="small mb-0 mt-2" id="copyStatus" role="status" aria-live="polite"></p>
+      </section>
+
+      <!--
+        [05] DataTables가 데이터를 표현할 테이블
+        thead의 8개 th는 열 제목만 정의한다. tbody는 의도적으로 비어 있으며,
+        페이지가 준비된 뒤 DataTables가 AJAX로 받은 data 배열을 행(tr)과 셀(td)로 만들어 삽입한다.
+        따라서 호스트 목록 데이터 자체는 최초 HTML에 포함되지 않는다.
+      -->
+      <table id="hostTable" class="table table-hover table-bordered w-100">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Hostname</th>
+            <th>IP Address</th>
+            <th>Description</th>
+            <th>Status</th>
+            <th>Created</th>
+            <th>Updated</th>
+            <th class="text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!--
+  [06] 생성과 수정이 함께 사용하는 입력 모달
+  생성 시 editId는 빈 값이고, 수정 시에는 조회한 호스트 id를 숨겨서 보관한다.
+  나머지 입력 요소의 id는 저장 JavaScript가 값을 읽어 JSON payload를 만들 때 사용한다.
+  form은 직접 submit하지 않으며 btnSaveHost 클릭 이벤트가 AJAX 저장을 담당한다.
+-->
+<div class="modal fade" id="hostModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="hostModalTitle">Add Host</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="hostForm" novalidate>
+          <input type="hidden" id="editId" />
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="fHostname">Hostname <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="fHostname" placeholder="e.g. web-server-01" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="fIpAddress">IP Address <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="fIpAddress" placeholder="e.g. 192.168.1.10" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="fDescription">Description</label>
+            <textarea class="form-control" id="fDescription" rows="3" placeholder="Optional notes"></textarea>
+          </div>
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" id="fIsActive" checked />
+            <label class="form-check-label" for="fIsActive">Active</label>
+          </div>
+          <div id="formError" class="text-danger small mt-2 d-none"></div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" id="btnSaveHost">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!--
+  [07] 삭제 확인 모달
+  사용자가 목록의 Delete 버튼을 누르면 해당 행의 hostname과 ip_address를 deleteLabel에 표시한다.
+  실제 삭제 요청은 이 모달의 btnConfirmDelete를 다시 눌렀을 때만 전송된다.
+-->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">Confirm Delete</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        Delete <strong id="deleteLabel"></strong>?
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-danger" id="btnConfirmDelete">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!--
+  [08] 화면 동작에 필요한 JavaScript 라이브러리 로드 순서
+  jQuery는 $ 선택자·이벤트 처리와 DataTables 플러그인의 기반이다.
+  Bootstrap bundle은 모달 표시/숨김을 제공하고, DataTables core는 AJAX 테이블을 생성한다.
+  마지막 Bootstrap 연동 스크립트가 DataTables의 검색·페이징 UI를 Bootstrap 형태로 표현한다.
+-->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"
+        integrity="sha384-1H217gwSVyLSIfaLxHbE7dRb3v4mYCKbpQvzx0cegeju1MVsGrX5xXxAvs/HgeFs"
+        crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
+        crossorigin="anonymous"></script>
+<script src="https://cdn.datatables.net/2.0.8/js/dataTables.min.js"
+        integrity="sha384-nJy9D0UBD2LV93ED7IXSsdWfa9PumZvn70zRSR/oFw5Zq0x6gWwWdpLeGsbVATVg"
+        crossorigin="anonymous"></script>
+<script src="https://cdn.datatables.net/2.0.8/js/dataTables.bootstrap5.min.js"
+        integrity="sha384-ks7+ewhGLKJbkT2/4rC58iNvYS4s9PE4sQpF/sT8V6to+uomItbPi3PHIZN7naMV"
+        crossorigin="anonymous"></script>
+
+<script>
+  /* cspell:ignore csrftoken */
+
+  /*
+   * [09] Django CSRF 토큰 읽기
+   * Django가 브라우저 쿠키에 저장한 "csrftoken=..." 항목을 세미콜론 단위로 찾는다.
+   * 찾은 토큰은 DataTables 목록 조회·생성·수정·삭제 POST 요청의 X-CSRFToken 헤더에 포함되어,
+   * 서버가 이 요청이 현재 사이트에서 보낸 정상 요청인지 확인할 수 있게 한다.
+   * 토큰이 없으면 빈 문자열을 반환하며, 그 경우 Django의 CSRF 검증에서 POST 요청이 거부될 수 있다.
+   */
+  function getCsrfToken() {
+    const name = "csrftoken=";
+    return document.cookie.split(";")
+      .map(c => c.trim())
+      .find(c => c.startsWith(name))
+      ?.substring(name.length) ?? "";
+  }
+
+  /*
+   * [10] 생성·수정·삭제에 공통으로 사용하는 AJAX 함수
+   * 호출 측에서 전달한 JavaScript 객체 body를 JSON.stringify로 JSON 문자열로 바꾼다.
+   * $.ajax는 url에 POST 요청을 보내고, Content-Type으로 JSON 본문임을 서버에 알린다.
+   * dataType: "json"은 JSON 응답 본문을 JavaScript 객체로 변환한다.
+   * 반환된 jqXHR을 호출 측에서 await하면 변환된 객체가 data 변수로 돌아간다.
+   */
+  function apiCall(url, body) {
+    return $.ajax({
+      url,
+      type: "POST",
+      contentType: "application/json",
+      dataType: "json",
+      headers: {
+        "X-CSRFToken": getCsrfToken(),
+      },
+      data: JSON.stringify(body),
+    });
+  }
+
+  /*
+   * [10-A] 페이지 이동과 무관한 선택 상태 저장소
+   * DataTables는 서버 사이드 모드에서 페이지를 바꿀 때 기존 tr을 제거하므로,
+   * 체크박스 DOM만으로는 이전 페이지의 선택을 기억할 수 없다.
+   *
+   * selectedRows는 HostIP id를 키로, 서버에서 받은 원본 행 객체를 값으로 보관한다.
+   * Map을 사용하면 같은 행을 여러 번 선택해도 중복되지 않고, 삽입 순서가 유지되어
+   * 사용자가 선택한 순서대로 JSON 배열을 만들 수 있다.
+   */
+  const selectedRows = new Map();
+
+  /*
+   * [10-B] 현재 열 선택과 요약 문구 갱신
+   * 체크된 input의 value는 서버 응답 객체의 실제 키와 동일하다.
+   * 복사 버튼은 행과 열이 각각 하나 이상 선택됐을 때만 활성화하여
+   * 빈 배열 또는 빈 객체를 실수로 복사하는 상황을 막는다.
+   */
+  function getSelectedFields() {
+    return $("#columnSelector input[type='checkbox']:checked")
+      .map((_, input) => input.value)
+      .get();
+  }
+
+  function updateSelectionSummary() {
+    const rowCount = selectedRows.size;
+    const columnCount = getSelectedFields().length;
+    $("#selectionSummary").text(`${rowCount} rows × ${columnCount} columns selected`);
+    $("#btnCopySelected").prop("disabled", rowCount === 0 || columnCount === 0);
+  }
+
+  /*
+   * [10-C] 사용자에게 복사 결과 알림
+   * 성공과 실패를 색상만으로 구분하지 않고 문장으로도 전달한다.
+   * 새 선택 작업을 시작할 때는 빈 문자열을 전달해 이전 결과를 지운다.
+   */
+  function setCopyStatus(message, isError = false) {
+    $("#copyStatus")
+      .text(message)
+      .toggleClass("text-success", Boolean(message) && !isError)
+      .toggleClass("text-danger", Boolean(message) && isError);
+  }
+
+  /*
+   * [11] DataTables 초기화와 목록 데이터 호출
+   * $("#hostTable")로 [05]의 테이블을 선택한 뒤 DataTable 인스턴스를 만든다.
+   *
+   * =================================================================
+   * [프론트엔드 관점] DataTables 서버 사이드 페이징 — 브라우저가 하는 일
+   * =================================================================
+   *
+   * serverSide: true 가 페이징 방식을 결정한다.
+   *
+   *   serverSide: false (클라이언트 사이드) — 전체 데이터를 한 번에 받아
+   *     브라우저 메모리에 보관하고, 페이지 버튼 클릭 시 서버 요청 없이
+   *     이미 받은 배열을 start~start+length 구간으로 잘라 tbody에 그린다.
+   *
+   *   serverSide: true (서버 사이드, 이 프로젝트) — 브라우저는 전체 데이터를
+   *     절대 보관하지 않는다. 페이지를 바꿀 때마다 서버에 POST 요청을 보내고,
+   *     응답의 data 배열(현재 페이지 행만)로 tbody를 통째로 교체한다.
+   *
+   * DataTables 내부 페이징 상태(개념적):
+   *
+   *   pageLength  — 한 페이지 행 수. 아래 pageLength: 25 로 초기값 설정.
+   *   start       — 현재 페이지의 0 기준 시작 위치. 내부에서만 관리되며,
+   *                 우리 코드에서 직접 읽거나 쓰지 않는다.
+   *   draw        — AJAX 요청마다 1씩 증가하는 순서 번호.
+   *
+   * start와 화면 페이지 번호의 관계:
+   *
+   *   start = (현재 페이지 번호 - 1) × pageLength
+   *
+   *   pageLength=25일 때:
+   *     1페이지 → start=0    2페이지 → start=25    3페이지 → start=50
+   *
+   * 사용자가 페이징 UI를 조작하면 일어나는 일 (순서대로):
+   *
+   *   1) DataTables가 내부 start·length 값을 갱신한다.
+   *      - "2" 페이지 버튼 클릭  → start = 25 (pageLength가 25일 때)
+   *      - "Previous" 클릭       → start -= pageLength (0 미만이면 무시)
+   *      - "Next" 클릭           → start += pageLength
+   *      - 페이지 크기 50으로 변경 → length=50, start=0 (항상 1페이지로 리셋)
+   *      - 검색어 입력           → start=0 (검색 결과의 1페이지부터)
+   *
+   *   2) draw()가 실행되며 ajax.url로 POST 요청을 보낸다.
+   *      요청 예시 (2페이지, 25개씩, 검색어 없음):
+   *
+   *      POST /hosts/data/
+   *      Header: X-CSRFToken: <csrftoken>
+   *      Content-Type: application/x-www-form-urlencoded
+   *      Body: draw=3&start=25&length=25&search[value]=&order[0][column]=0&order[0][dir]=desc&...
+   *
+   *      apiCall()의 JSON body와 다르다. DataTables는 폼 인코딩 본문으로 보낸다.
+   *      페이징에 필요한 핵심은 start와 length 두 개뿐이다.
+   *
+   *   3) 서버 응답 JSON을 받는다:
+   *
+   *      { draw: 3, recordsTotal: 200, recordsFiltered: 200, data: [ ...25개... ] }
+   *
+   *   4) draw 번호가 요청과 일치하는지 확인한다. 일치하지 않으면 응답을 버린다.
+   *      (늦게 도착한 이전 페이지 응답이 현재 화면을 덮어쓰는 것을 방지)
+   *
+   *   5) recordsFiltered와 length로 전체 페이지 수를 계산한다:
+   *
+   *      totalPages = Math.ceil(recordsFiltered / length)
+   *      예) recordsFiltered=63, length=25 → 3페이지
+   *
+   *   6) data 배열의 각 객체를 columns 설정에 따라 <tr>/<td>로 변환해 tbody에 삽입한다.
+   *      이전 페이지의 행은 DOM에서 제거되고, data에 있는 행만 남는다.
+   *      서버는 HTML을 보내지 않는다. 행 HTML은 전부 브라우저에서 생성한다.
+   *
+   *   7) 계산된 totalPages로 페이지 번호 버튼·Previous·Next HTML을 갱신한다.
+   *      이 UI도 우리가 작성하지 않았다. DataTables가 #hostTable 아래에 자동 생성한다.
+   *
+   * 브라우저에 "전체 200건"이 있는 것이 아니다. 항상 "현재 페이지 25건"만 DOM에 있다.
+   * table.ajax.reload()도 같은 메커니즘이다. 현재 start·length·검색·정렬 상태를 유지한 채
+   * draw를 증가시키고 data URL을 다시 POST 호출해 tbody를 새 data로 교체한다.
+   *
+   * -----------------------------------------------------------------
+   * 검색·정렬과의 관계 (페이징 맥락):
+   *
+   * 검색·정렬·페이지 이동·페이지 크기 변경은 모두 draw()를 트리거한다.
+   * DataTables가 내부 상태를 폼 인코딩 본문으로 직렬화해 POST로 보낸다.
+   * Django의 {% url 'hosts:data' %}는 렌더링 시 실제 data/ 경로로 치환된다.
+   */
+  const table = $("#hostTable").DataTable({
+    serverSide: true,
+    processing: true,
+    ajax: {
+      url: "{% url 'hosts:data' %}",
+      type: "POST",
+      headers: {
+        "X-CSRFToken": getCsrfToken(),
+      },
+    },
+
+    /*
+     * [12] 서버 데이터 필드와 화면 열의 연결
+     * 각 data 값은 응답 data 배열 안 객체의 키 이름이다.
+     * 단순 열은 값을 그대로 셀의 텍스트로 사용하고, description 키가 없을 때는 "—"를 표시한다.
+     * is_active와 Actions 열은 render 함수가 원본 값을 HTML 문자열로 변환해 배지와 버튼으로 표현한다.
+     */
+    columns: [
+      { data: "id", width: "40px" },
+      { data: "hostname" },
+      { data: "ip_address" },
+      { data: "description", defaultContent: "—" },
+      {
+        data: "is_active",
+        render: v => v
+          ? '<span class="badge badge-active">Active</span>'
+          : '<span class="badge badge-inactive">Inactive</span>',
+        width: "80px",
+      },
+      { data: "created_at" },
+      { data: "updated_at" },
+      {
+        data: "id",
+        orderable: false,
+        /*
+         * [13] 행별 Edit/Delete 버튼 생성
+         * 선택 체크박스와 Edit/Delete 버튼 모두 현재 행의 id를 data-id 속성에 넣는다.
+         * 체크박스는 해당 행을 JSON 복사 대상으로 추가·제거하고, 버튼 이벤트 핸들러는
+         * 상세 조회 URL, 수정 URL 또는 삭제 URL에 사용할 대상 호스트를 결정한다.
+         */
+        render: id =>
+          `<div class="d-flex gap-2 justify-content-center align-items-center">
+             <input class="form-check-input row-select m-0"
+                    type="checkbox"
+                    data-id="${id}"
+                    aria-label="Select host row ${id}" />
+             <button class="btn btn-sm btn-outline-primary btn-edit" data-id="${id}">Edit</button>
+             <button class="btn btn-sm btn-outline-danger btn-delete" data-id="${id}">Delete</button>
+           </div>`,
+        width: "165px",
+      },
+    ],
+
+    /*
+     * [14] 페이징·정렬 초기값
+     *
+     * pageLength: 25 — 첫 AJAX 요청의 length 파라미터. start=0과 함께 1페이지를 요청한다.
+     * lengthMenu   — DataTables가 "Show N entries" 드롭다운을 자동 생성한다.
+     *                  사용자가 50을 선택하면 length=50, start=0으로 리셋 후 draw()가 재실행된다.
+     * order        — 초기 정렬 조건. 페이징과 무관하지만 첫 draw() 요청에 포함된다.
+     * processing   — draw() 후 응답 대기 중 "Loading…" 문구를 표시한다.
+     */
+    order: [[0, "desc"]],
+    pageLength: 25,
+    lengthMenu: [10, 25, 50, 100],
+    language: { processing: "Loading…" },
+
+    /*
+     * [14-A] DataTables가 tbody를 다시 그린 직후 선택 상태 복원
+     * 검색·정렬·페이지 이동 때마다 tr과 체크박스가 새로 생성되므로,
+     * selectedRows에 id가 있는 행의 체크박스를 다시 체크하고 배경색을 적용한다.
+     * 이미 선택된 행을 서버에서 새로 받았다면 Map의 객체도 최신 응답으로 교체한다.
+     */
+    drawCallback() {
+      const api = this.api();
+      api.rows({ page: "current" }).every(function () {
+        const rowData = this.data();
+        const rowNode = this.node();
+        const isSelected = selectedRows.has(rowData.id);
+
+        if (isSelected) {
+          selectedRows.set(rowData.id, rowData);
+        }
+
+        $(rowNode)
+          .toggleClass("row-selected", isSelected)
+          .find(".row-select")
+          .prop("checked", isSelected);
+      });
+      updateSelectionSummary();
+    },
+  });
+
+  /*
+   * [14-B] 단일 행 체크박스 선택 처리
+   * AJAX로 생성되는 체크박스이므로 정적 요소가 아니라 #hostTable에 이벤트를 위임한다.
+   * DataTables API로 체크박스가 속한 tr의 원본 행 객체를 구해 Map에 저장하며,
+   * 해제 시에는 id를 키로 삭제한다.
+   */
+  $("#hostTable").on("change", ".row-select", function () {
+    const rowNode = $(this).closest("tr");
+    const rowData = table.row(rowNode).data();
+
+    if (this.checked) {
+      selectedRows.set(rowData.id, rowData);
+    } else {
+      selectedRows.delete(rowData.id);
+    }
+
+    rowNode.toggleClass("row-selected", this.checked);
+    setCopyStatus("");
+    updateSelectionSummary();
+  });
+
+  /*
+   * [14-C] 현재 페이지의 행 전체 선택과 전체 선택 해제
+   * "Select page rows"는 현재 DOM에 있는 페이지의 행만 추가한다.
+   * 기존에 다른 페이지에서 선택한 행은 유지된다.
+   * "Clear all rows"는 페이지와 관계없이 Map 전체를 비운다.
+   */
+  $("#btnSelectPageRows").on("click", () => {
+    table.rows({ page: "current" }).every(function () {
+      const rowData = this.data();
+      selectedRows.set(rowData.id, rowData);
+      $(this.node()).addClass("row-selected").find(".row-select").prop("checked", true);
+    });
+    setCopyStatus("");
+    updateSelectionSummary();
+  });
+
+  $("#btnClearRows").on("click", () => {
+    selectedRows.clear();
+    $("#hostTable tbody tr").removeClass("row-selected");
+    $("#hostTable .row-select").prop("checked", false);
+    setCopyStatus("");
+    updateSelectionSummary();
+  });
+
+  /*
+   * [14-D] JSON에 포함할 열 선택 처리
+   * 개별 체크박스 변경뿐 아니라 전체 선택/해제를 제공한다.
+   * 화면의 Actions 열은 HostIP 데이터 필드가 아니므로 선택 목록에 포함하지 않는다.
+   */
+  $("#columnSelector").on("change", "input[type='checkbox']", () => {
+    setCopyStatus("");
+    updateSelectionSummary();
+  });
+
+  $("#btnSelectAllColumns").on("click", () => {
+    $("#columnSelector input[type='checkbox']").prop("checked", true);
+    setCopyStatus("");
+    updateSelectionSummary();
+  });
+
+  $("#btnClearColumns").on("click", () => {
+    $("#columnSelector input[type='checkbox']").prop("checked", false);
+    setCopyStatus("");
+    updateSelectionSummary();
+  });
+
+  /*
+   * [14-E] Clipboard API를 사용할 수 없는 환경의 최소 대체 복사
+   * navigator.clipboard는 HTTPS 또는 localhost 같은 보안 컨텍스트에서만 동작한다.
+   * 사내 HTTP 주소처럼 Clipboard API가 막힌 환경에서는 화면 밖 textarea를 잠시 만들어
+   * 선택한 뒤 브라우저의 기존 copy 명령을 호출한다. 복사 후 요소는 즉시 제거한다.
+   */
+  function copyTextFallback(text) {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    try {
+      if (!document.execCommand("copy")) {
+        throw new Error("The browser rejected the copy command.");
+      }
+    } finally {
+      textarea.remove();
+    }
+  }
+
+  /*
+   * [14-F] 선택된 셀을 JSON 배열로 변환하고 클립보드에 복사
+   * 각 선택 행에서 사용자가 체크한 필드만 새 객체에 담는다.
+   * 화면 렌더링 결과(예: Status 배지 HTML)가 아니라 서버의 원본 값을 사용하므로
+   * is_active는 true/false 불리언으로, id는 숫자로 유지된다.
+   *
+   * 결과 예시:
+   * [
+   *   { "hostname": "web-01", "ip_address": "192.168.0.10" },
+   *   { "hostname": "db-01",  "ip_address": "192.168.0.20" }
+   * ]
+   */
+  $("#btnCopySelected").on("click", async () => {
+    const fields = getSelectedFields();
+    const jsonRows = Array.from(selectedRows.values()).map(row => {
+      const selectedCells = {};
+      fields.forEach(field => {
+        selectedCells[field] = row[field] ?? null;
+      });
+      return selectedCells;
+    });
+    const jsonText = JSON.stringify(jsonRows, null, 2);
+
+    try {
+      if (navigator.clipboard?.writeText && window.isSecureContext) {
+        await navigator.clipboard.writeText(jsonText);
+      } else {
+        copyTextFallback(jsonText);
+      }
+      setCopyStatus(`${jsonRows.length} selected rows copied as JSON.`);
+    } catch (error) {
+      setCopyStatus(`Copy failed: ${error.message}`, true);
+    }
+  });
+
+  /*
+   * [15] Bootstrap 모달 제어 객체 생성
+   * HTML의 #hostModal과 #deleteModal을 JavaScript 객체로 감싸,
+   * 뒤에서 show()와 hide()로 화면에 표시하거나 닫을 수 있게 한다.
+   */
+  const hostModal   = new bootstrap.Modal("#hostModal");
+  const deleteModal = new bootstrap.Modal("#deleteModal");
+
+  /*
+   * [16] 생성용 초기 상태로 입력 폼 정리
+   * 수정 대상 id와 기존 입력값·오류 문구를 지우고 Active 기본값을 true로 되돌린다.
+   * 제목도 "Add Host"로 바꿔 같은 모달을 생성 화면으로 재사용한다.
+   */
+  function resetForm() {
+    $("#editId").val("");
+    $("#hostForm")[0].reset();
+    $("#fIsActive").prop("checked", true);
+    $("#formError").addClass("d-none").text("");
+    $("#hostModalTitle").text("Add Host");
+  }
+
+  /*
+   * [17] Add Host 버튼 처리
+   * 정적 HTML의 #btnAddHost를 클릭하면 폼을 초기화하고 입력 모달을 연다.
+   * 이 시점에는 서버로 데이터를 보내거나 가져오지 않는다.
+   */
+  $("#btnAddHost").on("click", () => {
+    resetForm();
+    hostModal.show();
+  });
+
+  /*
+   * [18] Save 버튼: 입력값 수집과 최소 검증
+   * editId가 비어 있으면 생성, 값이 있으면 해당 id의 수정으로 판단한다.
+   * hostname과 IP의 앞뒤 공백을 제거한 뒤 둘 중 하나라도 비어 있으면
+   * AJAX 요청을 보내지 않고 모달 내부의 formError에 오류를 표시한다.
+   */
+  $("#btnSaveHost").on("click", async () => {
+    const id       = $("#editId").val();
+    const hostname = $("#fHostname").val().trim();
+    const ip       = $("#fIpAddress").val().trim();
+
+    if (!hostname || !ip) {
+      $("#formError").removeClass("d-none").text("Hostname and IP Address are required.");
+      return;
+    }
+
+    /*
+     * [19] 서버에 전송할 JSON 데이터와 URL 결정
+     * 폼 값을 서버의 HostIP 필드 이름에 맞춘 payload 객체로 만든다.
+     * 체크박스는 문자열이 아니라 true/false 불리언으로 변환된다.
+     * Django URL 태그는 페이지 렌더링 때 기본 경로로 치환되며,
+     * 수정이면 "<id>/update/", 생성이면 "create/" 엔드포인트를 사용한다.
+     */
+    const payload = {
+      hostname,
+      ip_address: ip,
+      description: $("#fDescription").val().trim(),
+      is_active: $("#fIsActive").is(":checked"),
+    };
+
+    const url  = id
+      ? `{% url 'hosts:index' %}${id}/update/`
+      : "{% url 'hosts:create' %}";
+
+    /*
+     * [20] 생성·수정 요청 결과 처리
+     * apiCall이 POST 응답 JSON을 객체로 반환할 때까지 기다린다.
+     * success가 true이면 모달을 닫고 table.ajax.reload()를 호출한다.
+     * reload는 현재 HTML 행을 임의로 고치는 대신 [11]의 data URL을 다시 POST 호출해
+     * 데이터베이스의 최신 목록을 받아 테이블 전체 표시를 갱신한다.
+     * 실패하면 서버의 error 문자열을 모달에 표시한다.
+     */
+    const data = await apiCall(url, payload);
+
+    if (data.success) {
+      /*
+       * 수정 전 행 객체가 Map에 남으면 다른 페이지로 이동한 경우 오래된 값이 복사될 수 있다.
+       * 수정 대상만 선택에서 제거하고, 새로 생성한 행은 아직 선택된 적이 없으므로 건드리지 않는다.
+       */
+      if (id) {
+        selectedRows.delete(Number(id));
+        updateSelectionSummary();
+      }
+      hostModal.hide();
+      table.ajax.reload();
+    } else {
+      $("#formError").removeClass("d-none").text(data.error ?? "An error occurred.");
+    }
+  });
+
+  /*
+   * [21] Edit 버튼: 선택한 호스트의 상세 데이터 조회
+   * 행 버튼은 AJAX 이후 동적으로 생성되므로 #hostTable에 이벤트를 위임하고
+   * 실제 클릭 대상이 .btn-edit일 때 처리한다. data-id에서 id를 읽은 뒤
+   * "<id>/" 주소로 GET 요청하고, 응답 JSON을 JavaScript 객체로 변환한다.
+   *
+   * 상세 응답 형식:
+   * { id, hostname, ip_address, description, is_active }
+   */
+  $("#hostTable").on("click", ".btn-edit", async function () {
+    const id = $(this).data("id");
+    const data = await $.ajax({
+      url: `{% url 'hosts:index' %}${id}/`,
+      type: "GET",
+      dataType: "json",
+    });
+
+    /*
+     * [22] 조회한 상세 데이터를 수정 폼에 표현
+     * 먼저 이전 폼 상태를 지운 뒤 응답 객체의 각 필드를 대응하는 입력 요소에 넣는다.
+     * editId에 id를 보관하기 때문에 이후 Save 클릭 시 [19]에서 수정 URL이 선택된다.
+     * 제목을 "Edit Host"로 바꾸고 값이 채워진 모달을 화면에 표시한다.
+     */
+    resetForm();
+    $("#editId").val(data.id);
+    $("#fHostname").val(data.hostname);
+    $("#fIpAddress").val(data.ip_address);
+    $("#fDescription").val(data.description);
+    $("#fIsActive").prop("checked", data.is_active);
+    $("#hostModalTitle").text("Edit Host");
+    hostModal.show();
+  });
+
+  /*
+   * [23] 삭제 대기 대상 보관
+   * Delete 버튼 클릭과 최종 확인 클릭은 서로 다른 이벤트이므로,
+   * 두 이벤트 사이에서 대상 id를 유지하기 위한 변수다.
+   */
+  let pendingDeleteId = null;
+
+  /*
+   * [24] Delete 버튼: 삭제 대상 확인 화면 구성
+   * 동적으로 생성된 .btn-delete의 data-id를 pendingDeleteId에 저장한다.
+   * table.row(...).data()는 화면의 tr에 대응하는 DataTables 원본 객체를 반환한다.
+   * 여기서 hostname과 ip_address를 꺼내 확인 문구로 표현한 뒤 삭제 모달을 연다.
+   * 아직 서버에 삭제 요청은 보내지 않는다.
+   */
+  $("#hostTable").on("click", ".btn-delete", function () {
+    pendingDeleteId = $(this).data("id");
+    const row = table.row($(this).closest("tr")).data();
+    $("#deleteLabel").text(`${row.hostname} (${row.ip_address})`);
+    deleteModal.show();
+  });
+
+  /*
+   * [25] 삭제 확정과 목록 재호출
+   * 보관된 id가 없으면 아무 작업도 하지 않는다. id가 있으면 "<id>/delete/"로
+   * 빈 JSON 객체를 POST하고 서버의 삭제 결과 JSON을 기다린다.
+   * success가 true이면 모달을 닫고 DataTables의 POST AJAX를 다시 실행해
+   * 삭제된 행이 제외된 최신 목록을 표현한다. 마지막에는 대기 id를 초기화한다.
+   */
+  $("#btnConfirmDelete").on("click", async () => {
+    if (!pendingDeleteId) return;
+    const data = await apiCall(
+      `{% url 'hosts:index' %}${pendingDeleteId}/delete/`,
+      {}
+    );
+    if (data.success) {
+      selectedRows.delete(Number(pendingDeleteId));
+      updateSelectionSummary();
+      deleteModal.hide();
+      table.ajax.reload();
+    }
+    pendingDeleteId = null;
+  });
+</script>
+</body>
+</html>
