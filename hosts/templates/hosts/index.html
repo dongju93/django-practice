@@ -264,22 +264,31 @@
   }
 
   /*
-   * [10] 생성·수정·삭제에 공통으로 사용하는 AJAX 함수
+   * [10] 생성·수정·삭제에 공통으로 사용하는 AJAX 함수 (jQuery $.ajax)
    * 호출 측에서 전달한 JavaScript 객체 body를 JSON.stringify로 JSON 문자열로 바꾼다.
-   * fetch는 url에 POST 요청을 보내고, Content-Type으로 JSON 본문임을 서버에 알린다.
-   * await fetch는 HTTP 응답이 도착할 때까지 기다리고, resp.json()은 JSON 응답 본문을
-   * JavaScript 객체로 변환한다. 변환된 객체가 호출 측의 data 변수로 돌아간다.
+   * $.ajax는 url에 POST 요청을 보내고, contentType으로 JSON 본문임을 서버에 알린다.
+   * dataType: "json"이면 응답 본문을 JavaScript 객체로 자동 변환한다.
+   *
+   * $.ajax는 Promise처럼 동작하는 jqXHR을 반환하므로 호출 측에서 await로 결과를 받을 수 있다.
+   * 단, fetch와 동작이 하나 다르다. fetch는 HTTP 400/500 응답에서도 Promise를 resolve하지만,
+   * $.ajax는 2xx가 아니면 reject한다. 서버(create/update)는 검증 실패 시 400과 함께
+   * { success:false, error } JSON을 보내므로, .then의 실패 콜백에서 jqXHR.responseJSON을
+   * 그대로 resolve 값으로 돌려 기존 호출 측의 `if (data.success)` 분기를 그대로 사용한다.
    */
-  async function apiCall(url, body) {
-    const resp = await fetch(url, {
+  function apiCall(url, body) {
+    return $.ajax({
+      url: url,
       method: "POST",
+      contentType: "application/json",
       headers: {
-        "Content-Type": "application/json",
         "X-CSRFToken": getCsrfToken(),
       },
-      body: JSON.stringify(body),
-    });
-    return resp.json();
+      data: JSON.stringify(body),
+      dataType: "json",
+    }).then(
+      data => data,
+      jqXHR => jqXHR.responseJSON ?? { success: false, error: jqXHR.statusText || "Request failed" },
+    );
   }
 
   /*
@@ -720,15 +729,19 @@
    * [21] Edit 버튼: 선택한 호스트의 상세 데이터 조회
    * 행 버튼은 AJAX 이후 동적으로 생성되므로 #hostTable에 이벤트를 위임하고
    * 실제 클릭 대상이 .btn-edit일 때 처리한다. data-id에서 id를 읽은 뒤
-   * "<id>/" 주소로 GET 요청하고, 응답 JSON을 JavaScript 객체로 변환한다.
+   * "<id>/" 주소로 $.ajax GET 요청하고, dataType: "json"으로 응답을 객체로 변환한다.
+   * jqXHR은 thenable이므로 await로 응답 객체(data)를 바로 받을 수 있다.
    *
    * 상세 응답 형식:
    * { id, hostname, ip_address, description, is_active }
    */
   $("#hostTable").on("click", ".btn-edit", async function () {
     const id   = $(this).data("id");
-    const resp = await fetch(`{% url 'hosts:index' %}${id}/`);
-    const data = await resp.json();
+    const data = await $.ajax({
+      url: `{% url 'hosts:index' %}${id}/`,
+      method: "GET",
+      dataType: "json",
+    });
 
     /*
      * [22] 조회한 상세 데이터를 수정 폼에 표현
