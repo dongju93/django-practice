@@ -25,29 +25,35 @@ dev = [
 ]
 
 [tool.mypy]
+python_version = "3.13"
 plugins = ["mypy_django_plugin.main"]
 ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = "*.migrations.*"
+ignore_errors = true
 
 [tool.django-stubs]
 django_settings_module = "main.settings"
 
-[tool.pylint.'MASTER']
+[tool.pylint.MASTER]
 ignore = [".venv", "migrations"]
+load-plugins = ["pylint_django"]
+django-settings-module = "main.settings"
 
-[tool.pylint.'MESSAGES CONTROL']
+[tool.pylint.MESSAGES_CONTROL]
 disable = ["missing-docstring", "inconsistent-return-statements", "no-member"]
 
-[tool.black]
-target-version = ["py313"]
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+exclude = [".venv", "**/migrations/**"]
 
-[tool.isort]
-profile = "black"
-combine_as_imports = true
-py_version = 313
-known_first_party = ["main"]
-known_local_folder = ["polls", "snippets"]
-atomic = true
-balanced_wrapping = true
-combine_star = true
-group_by_package = true
-case_sensitive = true
+[tool.ruff.lint]
+select = ["I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["main", "polls", "snippets", "hosts", "api"]
+combine-as-imports = true
