@@ -326,5 +326,5 @@ fabric.properties
 
 # pycharm
 .idea/
-static/
+/static/
 log/
