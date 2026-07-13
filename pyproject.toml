@@ -3,12 +3,12 @@ name = "django-practice"
 version = "0.1.0"
 description = "Writing your first Django app"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
-    "django==5.2.15",
+    "django==5.2.16",
     "django-background-tasks==1.2.8", # Background tasks
     "django-environ==0.14.0",         # Load environment variables from .env files
-    "django-filter>=25.2",
+    "django-filter==26.1",
     "djangorestframework==3.17.1",
     "markdown==3.10.2",
     "pygments==2.20.0",
@@ -21,11 +21,12 @@ dev = [
     "django-debug-toolbar==7.0.0",          # Debugging tool for Django
     "django-silk==5.5.0",                   # Profiling and monitoring tool for Django
     "django-stubs[compatible-mypy]==6.0.6", # Type hints for Django
-    "pylint-django==2.7.0",
+    "djlint==1.40.6",
+    "pylint-django==2.8.0",
 ]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.12"
 plugins = ["mypy_django_plugin.main"]
 ignore_missing_imports = true
 warn_unused_ignores = true
