@@ -23,6 +23,7 @@ class CVEListView(ListView):
     template_name = "cves/list.html"
     context_object_name = "cves"
     paginate_by = 50
+    filterset = None
 
     def get_queryset(self):
         self.filterset = CVEFilter(self.request.GET, queryset=CVE.objects.all())

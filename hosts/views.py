@@ -181,7 +181,8 @@ class HostIPCreateView(LoginRequiredMixin, View):
                 is_active=body.get("is_active", True),
             )
             return JsonResponse({"success": True, "id": host.id}, status=201)
-        except Exception as exc:
+        except (KeyError, TypeError, ValueError) as exc:
+            # Invalid JSON or missing/wrong field types are client errors.
             return JsonResponse({"success": False, "error": str(exc)}, status=400)
 
 
@@ -214,7 +215,8 @@ class HostIPUpdateView(LoginRequiredMixin, View):
             host.is_active = body.get("is_active", host.is_active)
             host.save()
             return JsonResponse({"success": True})
-        except Exception as exc:
+        except (TypeError, ValueError) as exc:
+            # Invalid JSON or wrong field types are client errors.
             return JsonResponse({"success": False, "error": str(exc)}, status=400)
 
 

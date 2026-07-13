@@ -2,7 +2,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import patch
 
-from django.contrib.auth.models import Permission, User
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -11,8 +12,12 @@ from .filters import CVEFilter
 from .forms import CVEForm
 from .models import CVE
 
+User = get_user_model()
+
 
 class CVEFixtureMixin:
+    """Shared factory helpers for CVE test cases."""
+
     def create_cve(self, **overrides):
         values = {
             "cve_id": "CVE-2026-10001",

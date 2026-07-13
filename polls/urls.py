@@ -4,9 +4,10 @@ from . import views
 
 app_name = "polls"  # pylint: disable=invalid-name
 """
-patterns has changed from <question_id> to <pk> (15, 17 line)
-This is necessary because we’ll use the `DetailView` generic view to replace our `detail()` and `results()` views
-expects the primary key value captured from the URL to be called "pk".
+patterns has changed from <question_id> to <pk> (15, 17 line).
+This is necessary because we’ll use the `DetailView` generic view to replace
+our `detail()` and `results()` views; it expects the primary key value
+captured from the URL to be called "pk".
 """
 urlpatterns = [  # URL patterns for the 'polls' resource
     # ex: /polls/

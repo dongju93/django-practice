@@ -48,7 +48,9 @@ class CVEFilter(FilterSet):
 
     class Meta:
         model = CVE
-        fields = []
+        # Explicit filters are declared above; keep Meta.fields empty and typed
+        # so mypy accepts the FilterSet Meta contract.
+        fields: list[str] = []
 
     def filter_keyword(self, queryset, _name, value):
         keyword = value.strip()

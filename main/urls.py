@@ -16,11 +16,13 @@ Including another URLconf
 """
 
 from django.contrib import admin
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.urls import include, path
 from rest_framework import routers, serializers, viewsets
 
 from main.settings import DEBUG
+
+User = get_user_model()
 
 
 # Serializers define the API representation.
