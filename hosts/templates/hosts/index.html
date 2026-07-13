@@ -1,54 +1,51 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <!--
+    <head>
+        <!--
     [01] 문서 기본 설정
     이 파일은 Django 뷰가 먼저 HTML로 렌더링한 뒤 브라우저에 전달하는 템플릿이다.
     브라우저는 UTF-8로 문자를 해석하고, viewport 설정을 사용해 화면 너비에 맞춰 레이아웃을 표시한다.
   -->
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Host IP Manager</title>
-
-  <!--
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Host IP Manager</title>
+        <!--
     [02] 화면 표현용 CSS 라이브러리
     Bootstrap은 버튼·카드·모달·테이블의 기본 디자인을 제공한다.
     DataTables의 Bootstrap 스킨은 DataTables가 생성하는 검색창, 페이지 이동 UI 등을
     Bootstrap 스타일로 표현한다. 이 단계에서는 데이터를 요청하지 않고 스타일만 불러온다.
   -->
-  <link rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
-        integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
-        crossorigin="anonymous" />
-  <link rel="stylesheet"
-        href="https://cdn.datatables.net/2.0.8/css/dataTables.bootstrap5.min.css"
-        integrity="sha384-A3od1iroH5dfODhbBSEOyHUQv+mVRcDXJL4XToPrjsqOofphRr+Cl3PvBcQ1QCC3"
-        crossorigin="anonymous" />
-
-  <!--
+        <link rel="stylesheet"
+              href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+              integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
+              crossorigin="anonymous" />
+        <link rel="stylesheet"
+              href="https://cdn.datatables.net/2.0.8/css/dataTables.bootstrap5.min.css"
+              integrity="sha384-A3od1iroH5dfODhbBSEOyHUQv+mVRcDXJL4XToPrjsqOofphRr+Cl3PvBcQ1QCC3"
+              crossorigin="anonymous" />
+        <!--
     [03] 이 페이지 전용 표현 규칙
     서버에서 받은 is_active 값은 badge-active/badge-inactive 색상으로 구분하며,
     #hostTable의 헤더는 데이터와 별개로 항상 어두운 배경과 흰 글자로 표시한다.
     스타일 규칙은 hosts/static/hosts/index.css에 정의되어 있다.
   -->
-  <link rel="stylesheet" href="{% static 'hosts/index.css' %}" />
-</head>
-<body>
-<!--
+        <link rel="stylesheet" href="{% static 'hosts/index.css' %}" />
+    </head>
+    <body>
+        <!--
   [04] 목록 화면의 정적 HTML 골격
   제목과 Add Host 버튼은 최초 HTML 응답에 포함된다. btnAddHost의 id는 뒤쪽 JavaScript가
   클릭 이벤트를 연결할 때 사용하며, 클릭하면 서버 요청 없이 입력 모달부터 연다.
 -->
-<div class="container-fluid py-4 px-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="fw-bold mb-0">Host IP Manager</h2>
-    <button class="btn btn-primary" id="btnAddHost">+ Add Host</button>
-  </div>
-
-  <div class="card shadow-sm">
-    <div class="card-body">
-      <!--
+        <div class="container-fluid py-4 px-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="fw-bold mb-0">Host IP Manager</h2>
+                <button class="btn btn-primary" id="btnAddHost">+ Add Host</button>
+            </div>
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <!--
         [05-A] 셀 선택 및 JSON 복사 도구
         각 행의 가장 왼쪽 # 셀을 클릭하면 해당 행의 데이터 셀 전체가 선택된다.
         제목 행의 열 제목을 클릭하면 현재 페이지에 표시된 해당 열의 셀이 선택된다.
@@ -58,153 +55,164 @@
         행 선택은 selectedRows Map에, 열 선택은 selectedFields Set에 별도로 보관한다.
         페이지를 이동하면 두 선택 상태를 모두 초기화해 현재 페이지 선택만 유지한다.
       -->
-      <section class="selection-toolbar p-3 mb-3" aria-labelledby="selectionTitle">
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-          <h3 class="h6 fw-bold mb-0" id="selectionTitle">Selection &amp; JSON copy</h3>
-          <div class="d-flex flex-wrap gap-2">
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnClearSelection">
-              Clear selection
-            </button>
-            <button type="button" class="btn btn-sm btn-success" id="btnCopySelected" disabled>
-              Copy selected cells as JSON
-            </button>
-          </div>
-        </div>
-
-        <p class="small text-muted mb-0 mt-2">
-          Click a row's leftmost # cell to select the row, or click a column heading to select the column.
-        </p>
-        <p class="small text-muted mb-0" id="selectionSummary">0 rows × 0 columns selected</p>
-
-        <!--
+                    <section class="selection-toolbar p-3 mb-3" aria-labelledby="selectionTitle">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                            <h3 class="h6 fw-bold mb-0" id="selectionTitle">Selection &amp; JSON copy</h3>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        id="btnClearSelection">Clear selection</button>
+                                <button type="button"
+                                        class="btn btn-sm btn-success"
+                                        id="btnCopySelected"
+                                        disabled>Copy selected cells as JSON</button>
+                            </div>
+                        </div>
+                        <p class="small text-muted mb-0 mt-2">
+                            Click a row's leftmost # cell to select the row, or click a column heading to select the column.
+                        </p>
+                        <p class="small text-muted mb-0" id="selectionSummary">0 rows × 0 columns selected</p>
+                        <!--
           role="status"와 aria-live는 복사 성공·실패 결과를 화면 낭독기에 전달한다.
           버튼 포커스를 이동시키지 않으므로 연속해서 선택을 수정하고 다시 복사할 수 있다.
         -->
-        <p class="small mb-0 mt-2" id="copyStatus" role="status" aria-live="polite"></p>
-      </section>
-
-      <!--
+                        <p class="small mb-0 mt-2"
+                           id="copyStatus"
+                           role="status"
+                           aria-live="polite"></p>
+                    </section>
+                    <!--
         [05] DataTables가 데이터를 표현할 테이블
         thead의 8개 th는 열 제목만 정의한다. tbody는 의도적으로 비어 있으며,
         페이지가 준비된 뒤 DataTables가 AJAX로 받은 data 배열을 행(tr)과 셀(td)로 만들어 삽입한다.
         따라서 호스트 목록 데이터 자체는 최초 HTML에 포함되지 않는다.
       -->
-      <table id="hostTable" class="table table-hover table-bordered w-100">
-        <thead>
-          <tr>
-            <th scope="col">#</th>
-            <th scope="col">Hostname</th>
-            <th scope="col">IP Address</th>
-            <th scope="col">Description</th>
-            <th scope="col">Status</th>
-            <th scope="col">Created</th>
-            <th scope="col">Updated</th>
-            <th class="text-center">Actions</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!--
+                    <table id="hostTable" class="table table-hover table-bordered w-100">
+                        <thead>
+                            <tr>
+                                <th scope="col">#</th>
+                                <th scope="col">Hostname</th>
+                                <th scope="col">IP Address</th>
+                                <th scope="col">Description</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Created</th>
+                                <th scope="col">Updated</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <!--
   [06] 생성과 수정이 함께 사용하는 입력 모달
   생성 시 editId는 빈 값이고, 수정 시에는 조회한 호스트 id를 숨겨서 보관한다.
   나머지 입력 요소의 id는 저장 JavaScript가 값을 읽어 JSON payload를 만들 때 사용한다.
   form은 직접 submit하지 않으며 btnSaveHost 클릭 이벤트가 AJAX 저장을 담당한다.
 -->
-<div class="modal fade" id="hostModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="hostModalTitle">Add Host</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <form id="hostForm" novalidate>
-          <input type="hidden" id="editId" />
-          <div class="mb-3">
-            <label class="form-label fw-semibold" for="fHostname">Hostname <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" id="fHostname" placeholder="e.g. web-server-01" required />
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold" for="fIpAddress">IP Address <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" id="fIpAddress" placeholder="e.g. 192.168.1.10" required />
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold" for="fDescription">Description</label>
-            <textarea class="form-control" id="fDescription" rows="3" placeholder="Optional notes"></textarea>
-          </div>
-          <div class="form-check form-switch mb-2">
-            <input class="form-check-input" type="checkbox" id="fIsActive" checked />
-            <label class="form-check-label" for="fIsActive">Active</label>
-          </div>
-          <div id="formError" class="text-danger small mt-2 d-none"></div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button class="btn btn-primary" id="btnSaveHost">Save</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!--
+        <div class="modal fade" id="hostModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="hostModalTitle">Add Host</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="hostForm" novalidate>
+                            <input type="hidden" id="editId" />
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold" for="fHostname">Hostname <span class="text-danger">*</span></label>
+                                <input type="text"
+                                       class="form-control"
+                                       id="fHostname"
+                                       placeholder="e.g. web-server-01"
+                                       required />
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold" for="fIpAddress">IP Address <span class="text-danger">*</span></label>
+                                <input type="text"
+                                       class="form-control"
+                                       id="fIpAddress"
+                                       placeholder="e.g. 192.168.1.10"
+                                       required />
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold" for="fDescription">Description</label>
+                                <textarea class="form-control"
+                                          id="fDescription"
+                                          rows="3"
+                                          placeholder="Optional notes"></textarea>
+                            </div>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="fIsActive" checked />
+                                <label class="form-check-label" for="fIsActive">Active</label>
+                            </div>
+                            <div id="formError" class="text-danger small mt-2 d-none"></div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button class="btn btn-primary" id="btnSaveHost">Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!--
   [07] 삭제 확인 모달
   사용자가 목록의 Delete 버튼을 누르면 해당 행의 hostname과 ip_address를 deleteLabel에 표시한다.
   실제 삭제 요청은 이 모달의 btnConfirmDelete를 다시 눌렀을 때만 전송된다.
 -->
-<div class="modal fade" id="deleteModal" tabindex="-1">
-  <div class="modal-dialog modal-sm">
-    <div class="modal-content">
-      <div class="modal-header bg-danger text-white">
-        <h5 class="modal-title">Confirm Delete</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        Delete <strong id="deleteLabel"></strong>?
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button class="btn btn-danger" id="btnConfirmDelete">Delete</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!--
+        <div class="modal fade" id="deleteModal" tabindex="-1">
+            <div class="modal-dialog modal-sm">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title">Confirm Delete</h5>
+                        <button type="button"
+                                class="btn-close btn-close-white"
+                                data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        Delete <strong id="deleteLabel"></strong>?
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button class="btn btn-danger" id="btnConfirmDelete">Delete</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!--
   [08] 화면 동작에 필요한 JavaScript 라이브러리 로드 순서
   jQuery는 $ 선택자·이벤트 처리와 DataTables 플러그인의 기반이다.
   Bootstrap bundle은 모달 표시/숨김을 제공하고, DataTables core는 AJAX 테이블을 생성한다.
   마지막 Bootstrap 연동 스크립트가 DataTables의 검색·페이징 UI를 Bootstrap 형태로 표현한다.
 -->
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"
-        integrity="sha384-1H217gwSVyLSIfaLxHbE7dRb3v4mYCKbpQvzx0cegeju1MVsGrX5xXxAvs/HgeFs"
-        crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
-        crossorigin="anonymous"></script>
-<script src="https://cdn.datatables.net/2.0.8/js/dataTables.min.js"
-        integrity="sha384-nJy9D0UBD2LV93ED7IXSsdWfa9PumZvn70zRSR/oFw5Zq0x6gWwWdpLeGsbVATVg"
-        crossorigin="anonymous"></script>
-<script src="https://cdn.datatables.net/2.0.8/js/dataTables.bootstrap5.min.js"
-        integrity="sha384-ks7+ewhGLKJbkT2/4rC58iNvYS4s9PE4sQpF/sT8V6to+uomItbPi3PHIZN7naMV"
-        crossorigin="anonymous"></script>
-
-<!--
+        <script src="https://code.jquery.com/jquery-3.7.1.min.js"
+                integrity="sha384-1H217gwSVyLSIfaLxHbE7dRb3v4mYCKbpQvzx0cegeju1MVsGrX5xXxAvs/HgeFs"
+                crossorigin="anonymous"></script>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+                integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
+                crossorigin="anonymous"></script>
+        <script src="https://cdn.datatables.net/2.0.8/js/dataTables.min.js"
+                integrity="sha384-nJy9D0UBD2LV93ED7IXSsdWfa9PumZvn70zRSR/oFw5Zq0x6gWwWdpLeGsbVATVg"
+                crossorigin="anonymous"></script>
+        <script src="https://cdn.datatables.net/2.0.8/js/dataTables.bootstrap5.min.js"
+                integrity="sha384-ks7+ewhGLKJbkT2/4rC58iNvYS4s9PE4sQpF/sT8V6to+uomItbPi3PHIZN7naMV"
+                crossorigin="anonymous"></script>
+        <!--
   [09] Django URL을 JavaScript 전역 변수로 노출
   Django 템플릿 태그는 정적 파일(.js)에서 처리할 수 없으므로, 필요한 URL만
   여기서 렌더링해 URLS 전역 객체로 노출한다. index.js는 이 객체를 참조한다.
 -->
-<script>
+        <script>
   const URLS = {
     data:   "{% url 'hosts:data' %}",
     index:  "{% url 'hosts:index' %}",
     create: "{% url 'hosts:create' %}",
   };
-</script>
-<script src="{% static 'hosts/index.js' %}"></script>
-</body>
+        </script>
+        <script src="{% static 'hosts/index.js' %}"></script>
+    </body>
 </html>
