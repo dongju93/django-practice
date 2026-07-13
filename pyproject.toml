@@ -18,16 +18,20 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "django-debug-toolbar==7.0.0",          # Debugging tool for Django
-    "django-silk==5.5.0",                   # Profiling and monitoring tool for Django
-    "django-stubs[compatible-mypy]==6.0.6", # Type hints for Django
+    "django-debug-toolbar==7.0.0",                        # Debugging tool for Django
+    "django-silk==5.5.0",                                 # Profiling and monitoring tool for Django
+    "django-stubs[compatible-mypy]==6.0.6",               # Type hints for Django
+    "djangorestframework-stubs[compatible-mypy]==3.17.0",
     "djlint==1.40.6",
     "pylint-django==2.8.0",
 ]
 
 [tool.mypy]
 python_version = "3.12"
-plugins = ["mypy_django_plugin.main"]
+plugins = [
+    "mypy_django_plugin.main",
+    "mypy_drf_plugin.main",
+]
 ignore_missing_imports = true
 warn_unused_ignores = true
 warn_redundant_casts = true
@@ -45,10 +49,22 @@ load-plugins = ["pylint_django"]
 django-settings-module = "main.settings"
 
 [tool.pylint.MESSAGES_CONTROL]
-disable = ["missing-docstring", "inconsistent-return-statements", "no-member"]
+# Django CBVs/DRF ViewSets inherit deep MRO trees; field-list overlap across
+# form/serializer/import modules is intentional shared schema, not accidental
+# copy-paste; management commands naturally take many options/locals.
+disable = [
+    "missing-docstring",
+    "inconsistent-return-statements",
+    "no-member",
+    "too-many-ancestors",
+    "duplicate-code",
+    "too-many-locals",
+    "too-many-branches",
+    "too-few-public-methods",
+]
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py312"
 line-length = 88
 exclude = [".venv", "**/migrations/**"]
 
@@ -56,5 +72,5 @@ exclude = [".venv", "**/migrations/**"]
 select = ["I"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["main", "polls", "snippets", "hosts", "api"]
+known-first-party = ["main", "polls", "snippets", "hosts", "api", "cves"]
 combine-as-imports = true
