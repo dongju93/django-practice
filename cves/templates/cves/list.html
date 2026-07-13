@@ -1,0 +1,150 @@
+{% extends "cves/base.html" %}
+{% block title %}CVE catalog{% endblock %}
+{% block content %}
+    <section class="page-heading" aria-labelledby="page-title">
+        <div>
+            <p class="eyebrow">Vulnerability records</p>
+            <h1 id="page-title">CVE catalog</h1>
+            <p>Search the locally stored NVD CVE records with the same django-filter rules used by the public API.</p>
+        </div>
+        {% if perms.cves.add_cve %}
+            <a class="button" href="{% url 'cves:create' %}">Add CVE</a>
+        {% endif %}
+    </section>
+    <section class="filter-panel" aria-labelledby="filter-heading">
+        <h2 id="filter-heading">Search and filter</h2>
+        {% if filterset.form.errors %}
+            <div class="error-summary" role="alert">
+                <p>Check the filter values and try again.</p>
+                {{ filterset.form.errors }}
+            </div>
+        {% endif %}
+        <form action="{% url 'cves:list' %}" method="get">
+            <fieldset>
+                <legend class="visually-hidden">CVE search filters</legend>
+                <div class="filter-grid">
+                    <div class="field field-wide">
+                        <label for="id_q">Keyword</label>
+                        {{ filterset.form.q }}
+                    </div>
+                    <div class="field">
+                        <label for="id_cve_id">CVE ID</label>
+                        {{ filterset.form.cve_id }}
+                    </div>
+                    <div class="field">
+                        <label for="id_cwe_id">CWE ID</label>
+                        {{ filterset.form.cwe_id }}
+                    </div>
+                    <div class="field">
+                        <label for="id_severity">Severity</label>
+                        {{ filterset.form.severity }}
+                    </div>
+                    <div class="field">
+                        <label for="id_vuln_status">Vulnerability status</label>
+                        {{ filterset.form.vuln_status }}
+                    </div>
+                    <div class="field">
+                        <label for="id_score_min">Minimum CVSS score</label>
+                        {{ filterset.form.score_min }}
+                    </div>
+                    <div class="field">
+                        <label for="id_score_max">Maximum CVSS score</label>
+                        {{ filterset.form.score_max }}
+                    </div>
+                    <div class="field">
+                        <label for="id_published_after">Published on or after</label>
+                        {{ filterset.form.published_after }}
+                    </div>
+                    <div class="field">
+                        <label for="id_published_before">Published on or before</label>
+                        {{ filterset.form.published_before }}
+                    </div>
+                </div>
+            </fieldset>
+            <div class="form-actions">
+                <button class="button" type="submit">Apply filters</button>
+                <a class="button button-secondary" href="{% url 'cves:list' %}">Reset</a>
+            </div>
+        </form>
+    </section>
+    <section aria-labelledby="results-heading">
+        <div class="results-heading">
+            <h2 id="results-heading">Results</h2>
+            <p>{{ page_obj.paginator.count }} record{{ page_obj.paginator.count|pluralize }}</p>
+        </div>
+        {% if cves %}
+            <div class="table-wrapper">
+                <table>
+                    <caption class="visually-hidden">Filtered CVE records</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">CVE ID</th>
+                            <th scope="col">Severity</th>
+                            <th scope="col">Score</th>
+                            <th scope="col">Description</th>
+                            <th scope="col">CWE IDs</th>
+                            <th scope="col">Published</th>
+                            <th scope="col"><span class="visually-hidden">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cve in cves %}
+                            <tr>
+                                <th scope="row">
+                                    <a href="{% url 'cves:detail' cve.cve_id %}">{{ cve.cve_id }}</a>
+                                </th>
+                                <td>
+                                    {% if cve.cvss_base_severity %}
+                                        <span class="severity severity-{{ cve.cvss_base_severity|lower }}">{{ cve.cvss_base_severity }}</span>
+                                    {% else %}
+                                        <span>—</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ cve.cvss_base_score|default:"—" }}</td>
+                                <td class="description-cell">{{ cve.description|default:"—"|truncatechars:180 }}</td>
+                                <td>{{ cve.cwe_ids|default:"—" }}</td>
+                                <td>{{ cve.published_at|date:"Y-m-d"|default:"—" }}</td>
+                                <td class="row-actions">
+                                    <a href="{% url 'cves:detail' cve.cve_id %}">View<span class="visually-hidden">{{ cve.cve_id }}</span></a>
+                                    {% if perms.cves.change_cve %}
+                                        <a href="{% url 'cves:edit' cve.cve_id %}">Edit<span class="visually-hidden">{{ cve.cve_id }}</span></a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if is_paginated %}
+                <nav class="pagination" aria-label="CVE result pages">
+                    <ul role="list">
+                        {% if page_obj.has_previous %}
+                            <li>
+                                <a href="?{% if query_string %}{{ query_string }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>
+                            </li>
+                        {% endif %}
+                        <li><span aria-current="page">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+                        {% if page_obj.has_next %}
+                            <li>
+                                <a href="?{% if query_string %}{{ query_string }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            {% endif %}
+        {% else %}
+            <div class="empty-state">
+                <h3>No CVE records found</h3>
+                <p>Try removing a filter or import records with <code>python manage.py import_nvd_cves</code>.</p>
+            </div>
+        {% endif %}
+    </section>
+    <aside class="api-note" aria-labelledby="api-heading">
+        <h2 id="api-heading">Public query API</h2>
+        <p>
+            External clients can query this catalog at
+            <a href="{{ api_list_url }}">{{ api_list_url }}</a>.
+            Example: <code>?severity=CRITICAL&amp;score_min=9&amp;page_size=50</code>
+        </p>
+    </aside>
+{% endblock %}

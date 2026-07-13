@@ -46,6 +46,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("polls/", include("polls.urls")),
     path("hosts/", include("hosts.urls")),
+    path("cves/", include("cves.urls")),
     path("api-auth/", include("rest_framework.urls")),
     path("api/", include("api.urls")),
 ]

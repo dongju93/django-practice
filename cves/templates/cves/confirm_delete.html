@@ -1,0 +1,17 @@
+{% extends "cves/base.html" %}
+{% block title %}Delete {{ cve.cve_id }}{% endblock %}
+{% block content %}
+    <section class="confirm-card" aria-labelledby="delete-title">
+        <p class="eyebrow">Destructive action</p>
+        <h1 id="delete-title">Delete {{ cve.cve_id }}?</h1>
+        <p>This permanently removes the local CVE record. You can import it again from NVD later.</p>
+        <form action="{{ request.path }}" method="post">
+            {% csrf_token %}
+            <div class="form-actions">
+                <button class="button button-danger" type="submit">Delete CVE</button>
+                <a class="button button-secondary"
+                   href="{% url 'cves:detail' cve.cve_id %}">Cancel</a>
+            </div>
+        </form>
+    </section>
+{% endblock %}

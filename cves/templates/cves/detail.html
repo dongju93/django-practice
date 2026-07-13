@@ -1,0 +1,95 @@
+{% extends "cves/base.html" %}
+{% block title %}{{ cve.cve_id }}{% endblock %}
+{% block content %}
+    <article class="detail-card" aria-labelledby="cve-title">
+        <header class="detail-header">
+            <div>
+                <p class="eyebrow">CVE record</p>
+                <h1 id="cve-title">{{ cve.cve_id }}</h1>
+                <p class="muted">{{ cve.vuln_status|default:"Status unavailable" }}</p>
+            </div>
+            <div class="detail-actions">
+                {% if perms.cves.change_cve %}
+                    <a class="button" href="{% url 'cves:edit' cve.cve_id %}">Edit</a>
+                {% endif %}
+                {% if perms.cves.delete_cve %}
+                    <a class="button button-danger"
+                       href="{% url 'cves:delete' cve.cve_id %}">Delete</a>
+                {% endif %}
+            </div>
+        </header>
+        <section aria-labelledby="summary-heading">
+            <h2 id="summary-heading">Description</h2>
+            <p class="description">{{ cve.description|default:"No English description is available." }}</p>
+        </section>
+        <section aria-labelledby="metadata-heading">
+            <h2 id="metadata-heading">Metadata</h2>
+            <dl class="metadata-grid">
+                <div>
+                    <dt>Source identifier</dt>
+                    <dd>
+                        {{ cve.source_identifier|default:"—" }}
+                    </dd>
+                </div>
+                <div>
+                    <dt>Published</dt>
+                    <dd>
+                        {{ cve.published_at|date:"Y-m-d H:i T"|default:"—" }}
+                    </dd>
+                </div>
+                <div>
+                    <dt>Last modified</dt>
+                    <dd>
+                        {{ cve.last_modified_at|date:"Y-m-d H:i T"|default:"—" }}
+                    </dd>
+                </div>
+                <div>
+                    <dt>CVSS version</dt>
+                    <dd>
+                        {{ cve.cvss_version|default:"—" }}
+                    </dd>
+                </div>
+                <div>
+                    <dt>CVSS score</dt>
+                    <dd>
+                        {{ cve.cvss_base_score|default:"—" }}
+                    </dd>
+                </div>
+                <div>
+                    <dt>CVSS severity</dt>
+                    <dd>
+                        {{ cve.cvss_base_severity|default:"—" }}
+                    </dd>
+                </div>
+                <div class="metadata-wide">
+                    <dt>CVSS vector</dt>
+                    <dd class="code-value">
+                        {{ cve.cvss_vector|default:"—" }}
+                    </dd>
+                </div>
+                <div class="metadata-wide">
+                    <dt>CWE IDs</dt>
+                    <dd>
+                        {{ cve.cwe_ids|default:"—" }}
+                    </dd>
+                </div>
+            </dl>
+        </section>
+        <section aria-labelledby="references-heading">
+            <h2 id="references-heading">References</h2>
+            {% if cve.reference_urls %}
+                <ul class="reference-list">
+                    {% for url in cve.reference_urls %}
+                        <li><a href="{{ url }}" target="_blank" rel="noopener noreferrer">{{ url }}</a></li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>No reference URLs are stored for this CVE.</p>
+            {% endif %}
+        </section>
+        <footer class="detail-footer">
+            <a href="{% url 'cves:list' %}">Back to catalog</a>
+            <a href="/api/v1/cves/{{ cve.cve_id }}/">Open JSON representation</a>
+        </footer>
+    </article>
+{% endblock %}

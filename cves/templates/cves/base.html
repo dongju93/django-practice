@@ -1,0 +1,37 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>{% block title %}CVE catalog{% endblock %} | Django Practice</title>
+        <link rel="stylesheet" href="{% static 'cves/styles.css' %}">
+    </head>
+    <body>
+        <a class="skip-link" href="#content">Skip to CVE content</a>
+        <header class="site-header">
+            <nav class="navigation" aria-label="Primary navigation">
+                <a class="brand" href="{% url 'cves:list' %}">CVE catalog</a>
+                <div class="navigation-actions">
+                    <a href="{{ api_list_url|default:'/api/v1/cves/' }}">Public API</a>
+                    {% if perms.cves.add_cve %}
+                        <a class="button button-small" href="{% url 'cves:create' %}">Add CVE</a>
+                    {% endif %}
+                </div>
+            </nav>
+        </header>
+        <main id="content" tabindex="-1" class="page-content">
+            {% if messages %}
+                <div class="message-list" aria-live="polite">
+                    {% for message in messages %}
+                        <div class="message message-{{ message.tags|default:'info' }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            {% block content %}{% endblock %}
+        </main>
+        <footer class="site-footer">
+            This product uses data from the NVD API but is not endorsed or certified by the NVD.
+        </footer>
+    </body>
+</html>

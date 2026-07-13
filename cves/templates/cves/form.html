@@ -1,0 +1,102 @@
+{% extends "cves/base.html" %}
+{% block title %}{% if cve %}Edit {{ cve.cve_id }}{% else %}Add CVE{% endif %}{% endblock %}
+{% block content %}
+    <section class="form-page" aria-labelledby="form-title">
+        <p class="eyebrow">CVE record</p>
+        <h1 id="form-title">{% if cve %}Edit {{ cve.cve_id }}{% else %}Add CVE{% endif %}</h1>
+        <p>Required fields are marked with an asterisk.</p>
+        {% if form.non_field_errors %}
+            <div class="error-summary" role="alert">{{ form.non_field_errors }}</div>
+        {% endif %}
+        <form class="cve-form" action="{{ request.path }}" method="post">
+            {% csrf_token %}
+            <fieldset>
+                <legend>Identity and description</legend>
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="{{ form.cve_id.id_for_label }}">CVE ID <span aria-hidden="true">*</span></label>
+                        {{ form.cve_id }}
+                        {% if form.cve_id.help_text %}<p class="hint">{{ form.cve_id.help_text }}</p>{% endif %}
+                        {% for error in form.cve_id.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.source_identifier.id_for_label }}">Source identifier</label>
+                        {{ form.source_identifier }}
+                        {% for error in form.source_identifier.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div class="field field-wide">
+                        <label for="{{ form.description.id_for_label }}">Description</label>
+                        {{ form.description }}
+                        {% for error in form.description.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.vuln_status.id_for_label }}">Vulnerability status</label>
+                        {{ form.vuln_status }}
+                        {% for error in form.vuln_status.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.cwe_ids.id_for_label }}">CWE IDs</label>
+                        {{ form.cwe_ids }}
+                        <p class="hint">{{ form.cwe_ids.help_text }}</p>
+                        {% for error in form.cwe_ids.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                    </div>
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend>CVSS assessment</legend>
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="{{ form.cvss_version.id_for_label }}">CVSS version</label>
+                        {{ form.cvss_version }}
+                        {% for error in form.cvss_version.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.cvss_base_score.id_for_label }}">Base score</label>
+                        {{ form.cvss_base_score }}
+                        {% for error in form.cvss_base_score.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.cvss_base_severity.id_for_label }}">Base severity</label>
+                        {{ form.cvss_base_severity }}
+                        {% for error in form.cvss_base_severity.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div class="field field-wide">
+                        <label for="{{ form.cvss_vector.id_for_label }}">CVSS vector</label>
+                        {{ form.cvss_vector }}
+                        {% for error in form.cvss_vector.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                    </div>
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend>Dates and references</legend>
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="{{ form.published_at.id_for_label }}">Published at</label>
+                        {{ form.published_at }}
+                        {% for error in form.published_at.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.last_modified_at.id_for_label }}">Last modified at</label>
+                        {{ form.last_modified_at }}
+                        {% for error in form.last_modified_at.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                    </div>
+                    <div class="field field-wide">
+                        <label for="{{ form.reference_urls.id_for_label }}">Reference URLs</label>
+                        {{ form.reference_urls }}
+                        <p class="hint">{{ form.reference_urls.help_text }}</p>
+                        {% for error in form.reference_urls.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+                    </div>
+                </div>
+            </fieldset>
+            <div class="form-actions">
+                <button class="button" type="submit">{% if cve %}Save changes{% else %}Create CVE{% endif %}</button>
+                {% if cve %}
+                    <a class="button button-secondary"
+                       href="{% url 'cves:detail' cve.cve_id %}">Cancel</a>
+                {% else %}
+                    <a class="button button-secondary" href="{% url 'cves:list' %}">Cancel</a>
+                {% endif %}
+            </div>
+        </form>
+    </section>
+{% endblock %}

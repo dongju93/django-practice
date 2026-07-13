@@ -38,6 +38,7 @@ ALLOWED_HOSTS: list = []
 INSTALLED_APPS = [
     "polls.apps.PollsConfig",
     "hosts.apps.HostsConfig",
+    "cves.apps.CvesConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -48,6 +49,7 @@ INSTALLED_APPS = [
     # "silk",  # Django Silk for profiling and monitoring
     "debug_toolbar",  # Debug toolbar for development
     "rest_framework",
+    "django_filters",
     "snippets",
 ]
 

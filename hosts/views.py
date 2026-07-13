@@ -18,7 +18,10 @@ class HostIPListView(LoginRequiredMixin, View):
 
 class HostIPDataView(LoginRequiredMixin, View):
     """Ajax endpoint consumed by DataTables (server-side processing)."""
-    raise_exception = True  # return 403 instead of redirect — keeps Ajax responses as JSON
+
+    raise_exception = (
+        True  # return 403 instead of redirect — keeps Ajax responses as JSON
+    )
 
     def post(self, request):
         # =================================================================
@@ -124,7 +127,11 @@ class HostIPDataView(LoginRequiredMixin, View):
             "updated_at",
             "id",
         )
-        order_field = order_fields[order_column] if 0 <= order_column < len(order_fields) else "id"
+        order_field = (
+            order_fields[order_column]
+            if 0 <= order_column < len(order_fields)
+            else "id"
+        )
         if order_direction == "desc":
             order_field = f"-{order_field}"
 
