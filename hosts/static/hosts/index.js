@@ -138,9 +138,9 @@ const table = $("#hostTable").DataTable({
    */
   columns: [
     { data: "id", width: "40px" },
-    { data: "hostname" },
-    { data: "ip_address" },
-    { data: "description", defaultContent: "—" },
+    { data: "hostname", render: DataTable.render.text() },
+    { data: "ip_address", render: DataTable.render.text() },
+    { data: "description", defaultContent: "—", render: DataTable.render.text() },
     {
       data: "is_active",
       render: v => v
@@ -148,8 +148,8 @@ const table = $("#hostTable").DataTable({
         : '<span class="badge badge-inactive">Inactive</span>',
       width: "80px",
     },
-    { data: "created_at" },
-    { data: "updated_at" },
+    { data: "created_at", render: DataTable.render.text() },
+    { data: "updated_at", render: DataTable.render.text() },
     {
       data: "id",
       orderable: false,
