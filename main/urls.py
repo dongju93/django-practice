@@ -19,6 +19,7 @@ from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.urls import include, path
 from rest_framework import routers, serializers, viewsets
+from rest_framework.permissions import IsAdminUser
 
 from main.settings import DEBUG
 
@@ -29,13 +30,14 @@ User = get_user_model()
 class UserSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = User
-        fields = ["url", "username", "email", "is_staff"]
+        fields = ["url", "username"]
 
 
 # ViewSets define the view behavior.
 class UserViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all()
+    queryset = User.objects.order_by("pk")
     serializer_class = UserSerializer
+    permission_classes = [IsAdminUser]
 
 
 # Routers provide an easy way of automatically determining the URL conf.
