@@ -1,8 +1,8 @@
-from django.urls import path
+from rest_framework.routers import SimpleRouter
 
-from snippets import views
+from snippets.views import SnippetViewSet
 
-urlpatterns = [
-    path("snippets/", views.snippet_list),
-    path("snippets/<int:pk>/", views.snippet_detail),
-]
+router = SimpleRouter()
+router.register("snippets", SnippetViewSet)
+
+urlpatterns = router.urls
