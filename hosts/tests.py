@@ -1,7 +1,9 @@
+import json
 import re
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.test import TestCase
 from django.urls import reverse
 
@@ -38,6 +40,10 @@ class HostIPStoredXSSTests(TestCase):
         self.user = get_user_model().objects.create_user(
             username="tester", password="password123"
         )
+        # These endpoints now require hosts.view_hostip (P1-2). The XSS
+        # contract is about what an authorized reader receives, so grant the
+        # read permission and keep the focus on the response body.
+        self.user.user_permissions.add(Permission.objects.get(codename="view_hostip"))
         self.client.force_login(self.user)
 
     def test_data_endpoint_returns_hostname_and_description_unmodified(self):
@@ -105,3 +111,115 @@ class HostTableRendererGuardTests(TestCase):
                 f'Column "{field}" must render with DataTable.render.text() '
                 "to stay safe against stored XSS.",
             )
+
+
+class HostIPAuthorizationTests(TestCase):
+    """
+    P1-2 regression: HostIP CRUD endpoints enforce per-action model
+    permissions, not just authentication.
+
+    Policy: access is gated by Django's default model permissions —
+    view_hostip (read), add_hostip (create), change_hostip (update),
+    delete_hostip (delete). A logged-in user without the matching
+    permission must be blocked. This is intentionally NOT a shared-editing
+    model: authentication alone grants nothing.
+
+    The Ajax/JSON endpoints answer a denied request with a 403 JSON body
+    ({"success": false, ...}), so the client's error handler reads the same
+    shape it gets from a 400.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.host = HostIP.objects.create(
+            hostname="web01", ip_address="10.0.0.1", description="prod"
+        )
+
+    def _make_user(self, username, *codenames):
+        user = get_user_model().objects.create_user(
+            username=username, password="password123"
+        )
+        for codename in codenames:
+            user.user_permissions.add(Permission.objects.get(codename=codename))
+        return user
+
+    # ---- denied: logged in but missing the required permission ----------
+
+    def test_list_page_denied_without_view_permission(self):
+        self.client.force_login(self._make_user("noperm"))
+        response = self.client.get(reverse("hosts:index"))
+        self.assertEqual(response.status_code, 403)
+
+    def test_data_endpoint_denied_without_view_permission(self):
+        self.client.force_login(self._make_user("noperm"))
+        response = self.client.post(reverse("hosts:data"), {"draw": 1})
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(response.json()["success"])
+
+    def test_detail_endpoint_denied_without_view_permission(self):
+        self.client.force_login(self._make_user("noperm"))
+        response = self.client.get(reverse("hosts:detail", args=[self.host.id]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_denied_without_add_permission(self):
+        self.client.force_login(self._make_user("noperm"))
+        response = self.client.post(
+            reverse("hosts:create"),
+            data=json.dumps({"hostname": "x", "ip_address": "10.0.0.9"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(HostIP.objects.filter(hostname="x").exists())
+
+    def test_update_denied_without_change_permission(self):
+        self.client.force_login(self._make_user("noperm"))
+        response = self.client.post(
+            reverse("hosts:update", args=[self.host.id]),
+            data=json.dumps({"hostname": "hacked"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.host.refresh_from_db()
+        self.assertEqual(self.host.hostname, "web01")
+
+    def test_delete_denied_without_delete_permission(self):
+        self.client.force_login(self._make_user("noperm"))
+        response = self.client.post(reverse("hosts:delete", args=[self.host.id]))
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(HostIP.objects.filter(id=self.host.id).exists())
+
+    def test_change_permission_does_not_grant_delete(self):
+        # Permissions are per-action: holding one does not imply another.
+        self.client.force_login(self._make_user("editor", "change_hostip"))
+        response = self.client.post(reverse("hosts:delete", args=[self.host.id]))
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(HostIP.objects.filter(id=self.host.id).exists())
+
+    # ---- allowed: user holding the matching permission -----------------
+
+    def test_create_allowed_with_add_permission(self):
+        self.client.force_login(self._make_user("creator", "add_hostip"))
+        response = self.client.post(
+            reverse("hosts:create"),
+            data=json.dumps({"hostname": "new", "ip_address": "10.0.0.8"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(HostIP.objects.filter(hostname="new").exists())
+
+    def test_update_allowed_with_change_permission(self):
+        self.client.force_login(self._make_user("editor2", "change_hostip"))
+        response = self.client.post(
+            reverse("hosts:update", args=[self.host.id]),
+            data=json.dumps({"hostname": "renamed"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.host.refresh_from_db()
+        self.assertEqual(self.host.hostname, "renamed")
+
+    def test_delete_allowed_with_delete_permission(self):
+        self.client.force_login(self._make_user("remover", "delete_hostip"))
+        response = self.client.post(reverse("hosts:delete", args=[self.host.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(HostIP.objects.filter(id=self.host.id).exists())

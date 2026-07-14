@@ -1,6 +1,6 @@
 import json
 
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import PermissionRequiredMixin
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
@@ -9,19 +9,45 @@ from django.views import View
 from .models import HostIP
 
 
-class HostIPListView(LoginRequiredMixin, View):
-    """Renders the main page; DataTables fetches data via Ajax."""
+class HostIPJsonPermissionMixin(PermissionRequiredMixin):
+    """Enforce a model permission on the Ajax/JSON HostIP endpoints.
+
+    ``PermissionRequiredMixin`` already covers authentication (an anonymous
+    user holds no permissions), so it gates both "not logged in" and "logged
+    in but unauthorized" through the same ``handle_no_permission`` hook. The
+    default hook redirects unauthenticated users to a login page and raises
+    ``PermissionDenied`` (an HTML 403) otherwise — neither is JSON, so the
+    client's ``$.ajax`` error handler cannot read ``data.error``. Overriding
+    it to always emit a 403 JSON body keeps every failure mode consistent
+    with the 400 responses these views already return.
+    """
+
+    def handle_no_permission(self):
+        return JsonResponse(
+            {"success": False, "error": "permission denied"},
+            status=403,
+        )
+
+
+class HostIPListView(PermissionRequiredMixin, View):
+    """Renders the main page; DataTables fetches data via Ajax.
+
+    This is a full HTML page rather than an Ajax endpoint, so it keeps the
+    default ``PermissionRequiredMixin`` behaviour: redirect anonymous users
+    to the login page and show an HTML 403 to authenticated users without
+    ``hosts.view_hostip``.
+    """
+
+    permission_required = "hosts.view_hostip"
 
     def get(self, request):
         return render(request, "hosts/index.html")
 
 
-class HostIPDataView(LoginRequiredMixin, View):
+class HostIPDataView(HostIPJsonPermissionMixin, View):
     """Ajax endpoint consumed by DataTables (server-side processing)."""
 
-    raise_exception = (
-        True  # return 403 instead of redirect — keeps Ajax responses as JSON
-    )
+    permission_required = "hosts.view_hostip"
 
     def post(self, request):
         # =================================================================
@@ -168,8 +194,8 @@ class HostIPDataView(LoginRequiredMixin, View):
         )
 
 
-class HostIPCreateView(LoginRequiredMixin, View):
-    raise_exception = True
+class HostIPCreateView(HostIPJsonPermissionMixin, View):
+    permission_required = "hosts.add_hostip"
 
     def post(self, request):
         try:
@@ -186,8 +212,8 @@ class HostIPCreateView(LoginRequiredMixin, View):
             return JsonResponse({"success": False, "error": str(exc)}, status=400)
 
 
-class HostIPDetailView(LoginRequiredMixin, View):
-    raise_exception = True
+class HostIPDetailView(HostIPJsonPermissionMixin, View):
+    permission_required = "hosts.view_hostip"
 
     def get(self, request, pk):
         host = get_object_or_404(HostIP, pk=pk)
@@ -202,8 +228,8 @@ class HostIPDetailView(LoginRequiredMixin, View):
         )
 
 
-class HostIPUpdateView(LoginRequiredMixin, View):
-    raise_exception = True
+class HostIPUpdateView(HostIPJsonPermissionMixin, View):
+    permission_required = "hosts.change_hostip"
 
     def post(self, request, pk):
         host = get_object_or_404(HostIP, pk=pk)
@@ -220,8 +246,8 @@ class HostIPUpdateView(LoginRequiredMixin, View):
             return JsonResponse({"success": False, "error": str(exc)}, status=400)
 
 
-class HostIPDeleteView(LoginRequiredMixin, View):
-    raise_exception = True
+class HostIPDeleteView(HostIPJsonPermissionMixin, View):
+    permission_required = "hosts.delete_hostip"
 
     def post(self, request, pk):
         host = get_object_or_404(HostIP, pk=pk)
