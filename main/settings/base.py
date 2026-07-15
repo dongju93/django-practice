@@ -6,6 +6,23 @@ from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
 
 
+def load_env_file(path: Path) -> None:
+    """Load KEY=VALUE pairs into os.environ without overriding existing exports."""
+    if not path.is_file():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        if not key:
+            continue
+        value = value.strip().strip("'").strip('"')
+        os.environ.setdefault(key, value)
+
+
 def env_value(name: str) -> str:
     """Return a required, non-empty environment variable."""
     value = os.environ.get(name, "").strip()

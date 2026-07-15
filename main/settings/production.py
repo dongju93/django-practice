@@ -4,7 +4,10 @@
 # pylint: disable=wildcard-import,unused-wildcard-import
 
 from .base import *  # noqa: F403
-from .base import env_bool, env_int, env_list, env_value
+from .base import BASE_DIR, env_bool, env_int, env_list, env_value, load_env_file
+
+# Optional file for local/prod-like runs (e.g. uWSGI). Already-exported vars win.
+load_env_file(BASE_DIR / ".env.production")
 
 SECRET_KEY = env_value("DJANGO_SECRET_KEY")
 DEBUG = env_bool("DJANGO_DEBUG", default=False)
