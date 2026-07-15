@@ -6,7 +6,44 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.views import View
 
+from .forms import HOST_ORDER_FIELDS, HostIPDataTableForm, HostIPForm
 from .models import HostIP
+
+
+def json_error_response(error, *, errors=None):
+    payload = {"success": False, "error": error}
+    if errors is not None:
+        payload["errors"] = errors
+    return JsonResponse(payload, status=400)
+
+
+def parse_json_object(request):
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None, json_error_response("invalid JSON body")
+
+    if not isinstance(body, dict):
+        return None, json_error_response("JSON body must be an object")
+
+    return body, None
+
+
+def host_form_data(body, instance=None):
+    if instance is None:
+        data = {"description": "", "is_active": True}
+    else:
+        data = {
+            "hostname": instance.hostname,
+            "ip_address": instance.ip_address,
+            "description": instance.description,
+            "is_active": instance.is_active,
+        }
+
+    for field_name in HostIPForm.Meta.fields:
+        if field_name in body:
+            data[field_name] = body[field_name]
+    return data
 
 
 class HostIPJsonPermissionMixin(PermissionRequiredMixin):
@@ -116,12 +153,27 @@ class HostIPDataView(HostIPJsonPermissionMixin, View):
         # Django는 본문을 파싱해 request.POST QueryDict에 넣는다.
         # request.POST 값은 문자열이므로 draw/start/length/order column은 int로 변환하고,
         # 검색어와 정렬 방향은 문자열로 가져온다.
-        draw = int(request.POST.get("draw", 1))
-        start = int(request.POST.get("start", 0))
-        length = int(request.POST.get("length", 10))
+        parameter_form = HostIPDataTableForm(
+            {
+                "draw": request.POST.get("draw", 1),
+                "start": request.POST.get("start", 0),
+                "length": request.POST.get("length", 10),
+                "order_column": request.POST.get("order[0][column]", 0),
+                "order_direction": request.POST.get("order[0][dir]", "desc"),
+            }
+        )
+        if not parameter_form.is_valid():
+            return json_error_response(
+                "invalid DataTables parameters",
+                errors=parameter_form.errors.get_json_data(),
+            )
+
+        draw = parameter_form.cleaned_data["draw"]
+        start = parameter_form.cleaned_data["start"]
+        length = parameter_form.cleaned_data["length"]
+        order_column = parameter_form.cleaned_data["order_column"]
+        order_direction = parameter_form.cleaned_data["order_direction"]
         search_value = request.POST.get("search[value]", "").strip()
-        order_column = int(request.POST.get("order[0][column]", 0))
-        order_direction = request.POST.get("order[0][dir]", "desc")
 
         qs = HostIP.objects.all()
 
@@ -143,21 +195,7 @@ class HostIPDataView(HostIPJsonPermissionMixin, View):
 
         # DataTables의 화면 열 번호를 실제 Django 모델 필드로 변환한다.
         # 정렬은 페이지를 자르기 전에 적용해야 모든 페이지의 행 순서가 일관된다.
-        order_fields = (
-            "id",
-            "hostname",
-            "ip_address",
-            "description",
-            "is_active",
-            "created_at",
-            "updated_at",
-            "id",
-        )
-        order_field = (
-            order_fields[order_column]
-            if 0 <= order_column < len(order_fields)
-            else "id"
-        )
+        order_field = HOST_ORDER_FIELDS[order_column]
         if order_direction == "desc":
             order_field = f"-{order_field}"
 
@@ -198,18 +236,19 @@ class HostIPCreateView(HostIPJsonPermissionMixin, View):
     permission_required = "hosts.add_hostip"
 
     def post(self, request):
-        try:
-            body = json.loads(request.body)
-            host = HostIP.objects.create(
-                hostname=body["hostname"],
-                ip_address=body["ip_address"],
-                description=body.get("description", ""),
-                is_active=body.get("is_active", True),
+        body, error_response = parse_json_object(request)
+        if error_response is not None:
+            return error_response
+
+        form = HostIPForm(host_form_data(body))
+        if not form.is_valid():
+            return json_error_response(
+                "invalid host data",
+                errors=form.errors.get_json_data(),
             )
-            return JsonResponse({"success": True, "id": host.id}, status=201)
-        except (KeyError, TypeError, ValueError) as exc:
-            # Invalid JSON or missing/wrong field types are client errors.
-            return JsonResponse({"success": False, "error": str(exc)}, status=400)
+
+        host = form.save()
+        return JsonResponse({"success": True, "id": host.id}, status=201)
 
 
 class HostIPDetailView(HostIPJsonPermissionMixin, View):
@@ -233,17 +272,19 @@ class HostIPUpdateView(HostIPJsonPermissionMixin, View):
 
     def post(self, request, pk):
         host = get_object_or_404(HostIP, pk=pk)
-        try:
-            body = json.loads(request.body)
-            host.hostname = body.get("hostname", host.hostname)
-            host.ip_address = body.get("ip_address", host.ip_address)
-            host.description = body.get("description", host.description)
-            host.is_active = body.get("is_active", host.is_active)
-            host.save()
-            return JsonResponse({"success": True})
-        except (TypeError, ValueError) as exc:
-            # Invalid JSON or wrong field types are client errors.
-            return JsonResponse({"success": False, "error": str(exc)}, status=400)
+        body, error_response = parse_json_object(request)
+        if error_response is not None:
+            return error_response
+
+        form = HostIPForm(host_form_data(body, host), instance=host)
+        if not form.is_valid():
+            return json_error_response(
+                "invalid host data",
+                errors=form.errors.get_json_data(),
+            )
+
+        form.save()
+        return JsonResponse({"success": True})
 
 
 class HostIPDeleteView(HostIPJsonPermissionMixin, View):

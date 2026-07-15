@@ -223,3 +223,147 @@ class HostIPAuthorizationTests(TestCase):
         response = self.client.post(reverse("hosts:delete", args=[self.host.id]))
         self.assertEqual(response.status_code, 200)
         self.assertFalse(HostIP.objects.filter(id=self.host.id).exists())
+
+
+class HostIPInputValidationTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = get_user_model().objects.create_user(
+            username="host-validator", password="password123"
+        )
+        cls.user.user_permissions.add(
+            Permission.objects.get(codename="add_hostip"),
+            Permission.objects.get(codename="change_hostip"),
+        )
+        cls.host = HostIP.objects.create(
+            hostname="web01",
+            ip_address="10.0.0.1",
+            description="prod",
+            is_active=True,
+        )
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def test_create_rejects_invalid_host_fields(self):
+        invalid_fields = (
+            ("ip_address", "not-an-ip"),
+            ("hostname", "h" * 256),
+            ("is_active", "false"),
+        )
+
+        for field_name, invalid_value in invalid_fields:
+            with self.subTest(field_name=field_name):
+                host_count = HostIP.objects.count()
+                payload = {
+                    "hostname": "new-host",
+                    "ip_address": "10.0.0.2",
+                    "is_active": True,
+                    field_name: invalid_value,
+                }
+                response = self.client.post(
+                    reverse("hosts:create"),
+                    data=json.dumps(payload),
+                    content_type="application/json",
+                )
+
+                self.assertEqual(response.status_code, 400)
+                self.assertIn(field_name, response.json()["errors"])
+                self.assertEqual(HostIP.objects.count(), host_count)
+
+    def test_update_rejects_invalid_host_fields_without_saving(self):
+        invalid_fields = (
+            ("ip_address", "not-an-ip"),
+            ("hostname", "h" * 256),
+            ("is_active", 0),
+        )
+
+        for field_name, invalid_value in invalid_fields:
+            with self.subTest(field_name=field_name):
+                response = self.client.post(
+                    reverse("hosts:update", args=[self.host.id]),
+                    data=json.dumps({field_name: invalid_value}),
+                    content_type="application/json",
+                )
+
+                self.assertEqual(response.status_code, 400)
+                self.assertIn(field_name, response.json()["errors"])
+                self.host.refresh_from_db()
+                self.assertEqual(self.host.hostname, "web01")
+                self.assertEqual(self.host.ip_address, "10.0.0.1")
+                self.assertIs(self.host.is_active, True)
+
+    def test_json_boolean_false_is_saved(self):
+        response = self.client.post(
+            reverse("hosts:update", args=[self.host.id]),
+            data=json.dumps({"is_active": False}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.host.refresh_from_db()
+        self.assertIs(self.host.is_active, False)
+
+
+class HostIPDataTableValidationTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = get_user_model().objects.create_user(
+            username="table-validator", password="password123"
+        )
+        cls.user.user_permissions.add(Permission.objects.get(codename="view_hostip"))
+        HostIP.objects.bulk_create(
+            HostIP(hostname=f"host-{index}", ip_address=f"10.0.0.{index}")
+            for index in range(1, 102)
+        )
+
+    def setUp(self):
+        self.client.force_login(self.user)
+
+    def _post_data(self, **overrides):
+        data = {
+            "draw": 1,
+            "start": 0,
+            "length": 25,
+            "order[0][column]": 0,
+            "order[0][dir]": "desc",
+        }
+        data.update(overrides)
+        return self.client.post(reverse("hosts:data"), data)
+
+    def test_invalid_paging_values_return_400(self):
+        invalid_values = (
+            {"start": "not-a-number"},
+            {"start": -1},
+            {"length": "not-a-number"},
+            {"length": 0},
+            {"length": -1},
+            {"length": 101},
+        )
+
+        for values in invalid_values:
+            with self.subTest(values=values):
+                response = self._post_data(**values)
+                self.assertEqual(response.status_code, 400)
+                self.assertFalse(response.json()["success"])
+
+    def test_invalid_draw_and_order_values_return_400(self):
+        invalid_values = (
+            {"draw": "not-a-number"},
+            {"draw": -1},
+            {"order[0][column]": "not-a-number"},
+            {"order[0][column]": 99},
+            {"order[0][dir]": "sideways"},
+        )
+
+        for values in invalid_values:
+            with self.subTest(values=values):
+                response = self._post_data(**values)
+                self.assertEqual(response.status_code, 400)
+                self.assertFalse(response.json()["success"])
+
+    def test_page_length_is_capped_at_100_rows(self):
+        response = self._post_data(length=100)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["data"]), 100)
