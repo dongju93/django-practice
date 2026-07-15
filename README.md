@@ -126,7 +126,7 @@ uv run python manage.py migrate
 uv run uwsgi --ini uwsgi.ini
 ```
 
-`uwsgi.ini`의 `static-map` 경로는 로컬 절대 경로 예시이므로, 배포 환경에 맞게 수정하세요. WhiteNoise가 미들웨어로 정적 파일을 서빙하므로, reverse proxy 뒤에서 static map 없이도 동작할 수 있습니다.
+`uwsgi.ini`의 `static-map`은 uWSGI 매직 변수 `%d`(ini 파일이 있는 디렉터리)를 쓰므로 로컬 절대 경로를 넣지 않아도 됩니다. WhiteNoise도 미들웨어로 정적 파일을 서빙하므로, reverse proxy 뒤에서 static map 없이도 동작할 수 있습니다.
 
 ---
 
