@@ -7,7 +7,6 @@ requires-python = ">=3.12"
 dependencies = [
     "django==5.2.16",
     "django-background-tasks==1.2.8", # Background tasks
-    "django-environ==0.14.0",         # Load environment variables from .env files
     "django-filter==26.1",
     "djangorestframework==3.17.1",
     "markdown==3.10.2",
@@ -41,12 +40,12 @@ module = "*.migrations.*"
 ignore_errors = true
 
 [tool.django-stubs]
-django_settings_module = "main.settings"
+django_settings_module = "main.settings.development"
 
 [tool.pylint.MASTER]
 ignore = [".venv", "migrations"]
 load-plugins = ["pylint_django"]
-django-settings-module = "main.settings"
+django-settings-module = "main.settings.development"
 
 [tool.pylint.MESSAGES_CONTROL]
 # Django CBVs/DRF ViewSets inherit deep MRO trees; field-list overlap across

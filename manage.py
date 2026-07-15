@@ -7,7 +7,7 @@ import sys
 
 def main():
     """Run administrative tasks."""
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "main.settings")
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "main.settings.development")
     try:
         # Deferred so a missing Django install raises a clear ImportError message.
         from django.core.management import (  # pylint: disable=import-outside-toplevel
