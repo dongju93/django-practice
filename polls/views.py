@@ -25,8 +25,8 @@ class IndexView(generic.ListView):
     context_object_name = "latest_question_list"
 
     def get_queryset(self):
-        """Return the last five published questions."""
-        return Question.objects.order_by("-pub_date")[:5]  # pylint: disable=no-member
+        """Return the last five questions published up to now."""
+        return Question.objects.published().order_by("-pub_date")[:5]  # pylint: disable=no-member
 
 
 class DetailView(generic.DetailView):
@@ -38,15 +38,25 @@ class DetailView(generic.DetailView):
     model = Question  # This is the model that the DetailView will use
     template_name = "polls/detail.html"  # The template to render the detail view
 
+    def get_queryset(self):
+        """Narrow the lookup set so future questions 404 instead of leaking."""
+        return Question.objects.published()  # pylint: disable=no-member
+
 
 class ResultsView(generic.DetailView):
     model = Question  # This is the model that the ResultsView will use
     template_name = "polls/results.html"  # The template to render the results view
 
+    def get_queryset(self):
+        """Results of an unpublished question must not be readable either."""
+        return Question.objects.published()  # pylint: disable=no-member
+
 
 def vote(request, question_id):
+    # Passing a queryset (not the model) makes get_object_or_404 apply the
+    # published filter, so voting on a future question raises 404.
     question = get_object_or_404(
-        Question,
+        Question.objects.published(),  # pylint: disable=no-member
         pk=question_id,
     )
     try:
